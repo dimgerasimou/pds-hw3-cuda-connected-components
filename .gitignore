@@ -1,3 +1,4 @@
 # build artifacts
 bin/
 obj/
+data/

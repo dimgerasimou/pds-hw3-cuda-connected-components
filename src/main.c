@@ -17,7 +17,9 @@
 
 #include "args.h"
 #include "error.h"
+#include "matrix.h"
 
+/* default values for cli args */
 #define DEFAULT_TRIALS  5
 #define DEFAILT_WTRIALS 1
 #define DEFAULT_IMPTYPE 0
@@ -25,8 +27,10 @@
 int
 main(int argc, char *argv[])
 {
+	Matrix *mtx;
+
 	/* cmdline args */
-	char *path            = NULL;
+	char         *path    = NULL;
 	unsigned int trials   = DEFAULT_TRIALS;
 	unsigned int wtrials  = DEFAILT_WTRIALS;
 	unsigned int imptype  = DEFAULT_IMPTYPE;
@@ -44,7 +48,9 @@ main(int argc, char *argv[])
 			break;
 	}
 
-	printf("n:%u w:%u i:%u p:%s\n", trials, wtrials, imptype, path);
+	mtx = matrixload(path);
+	if (!mtx)
+		return 1;
 
 	return 0;
 }
