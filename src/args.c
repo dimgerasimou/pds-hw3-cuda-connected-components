@@ -17,8 +17,6 @@
 #include "args.h"
 #include "error.h"
 
-extern const char *program_name;
-
 /* ------------------------------------------------------------------------- */
 /*                            Static Helper Functions                        */
 /* ------------------------------------------------------------------------- */
@@ -32,6 +30,11 @@ extern const char *program_name;
 static void
 usage(void)
 {
+	char *program_name = get_progname();
+
+	if (!program_name)
+		return;
+
 	printf(
 		"\n"
 		"Usage: %s [OPTIONS] <matrix_file>\n\n"

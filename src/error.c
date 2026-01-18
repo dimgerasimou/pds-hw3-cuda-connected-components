@@ -73,6 +73,22 @@ errinit(const char *name)
 	set_progname(name);
 }
 
+/**
+ * @brief Get program name.
+ *
+ * @return Pointer to program name.
+ */
+char*
+get_progname(void)
+{
+	char *ret = strdup(g_prog);
+	if (!ret) {
+		DERRNOF("strdup failed");
+		return NULL;
+	}
+	return ret;
+}
+
 /* ------------------------------------------------------------------------- */
 /*                            User-facing errors                             */
 /* ------------------------------------------------------------------------- */

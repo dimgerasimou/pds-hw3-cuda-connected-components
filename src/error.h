@@ -21,6 +21,15 @@
  */
 void errinit(const char *name);
 
+/**
+ * @brief Get program name.
+ *
+ * @note Caller must free.
+ *
+ * @return Pointer to program name.
+ */
+char* get_progname(void);
+
 /* ------------------------------------------------------------------------- */
 /*                            User-facing errors                             */
 /* ------------------------------------------------------------------------- */
