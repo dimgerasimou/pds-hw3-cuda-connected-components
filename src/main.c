@@ -13,21 +13,24 @@
  */
 
 #include <stdlib.h>
-#include <stdio.h>
 
 #include "args.h"
+#include "benchmark.h"
 #include "error.h"
 #include "matrix.h"
 
 /* default values for cli args */
 #define DEFAULT_TRIALS  5
 #define DEFAILT_WTRIALS 1
-#define DEFAULT_IMPTYPE 0
+#define DEFAULT_IMPTYPE IMPL_ALL
 
 int
 main(int argc, char *argv[])
 {
 	Matrix *mtx;
+	Benchmark *bench;
+	int result;
+	double load_time;
 
 	/* cmdline args */
 	char         *path    = NULL;
@@ -48,9 +51,32 @@ main(int argc, char *argv[])
 			break;
 	}
 
-	mtx = matrixload(path);
+	{
+		double time_start = nowsec();
+		mtx = matrixload(path);
+		load_time = nowsec() - time_start;
+	}
+
 	if (!mtx)
 		return 1;
 
+	bench = benchmarkinit(path, trials, wtrials, imptype, mtx);
+	if (!bench) {
+		matrixfree(mtx);
+		return 1;
+	}
+
+	bench->matrix_info.load_time_s = load_time;
+
+	if (benchmarkcc(mtx, bench)) {
+		benchmarkfree(bench);
+		matrixfree(mtx);
+		return 1;
+	}
+
+	benchmarkprint(bench);
+
+	benchmarkfree(bench);
+	matrixfree(mtx);
 	return 0;
 }

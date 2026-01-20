@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "args.h"
+#include "benchmark.h"
 #include "error.h"
 
 /* ------------------------------------------------------------------------- */
@@ -25,7 +26,6 @@
  * @brief Prints program usage instructions.
  *
  * Displays the valid command-line options and their expected arguments.
- * Output is written to stderr.
  */
 static void
 usage(void)
@@ -49,6 +49,8 @@ usage(void)
 		"  %s -n 10 -w 2 -i 1 ./data/graph.mtx\n",
 		program_name, program_name
 	);
+
+	free(program_name);
 }
 
 /**
@@ -175,6 +177,11 @@ parseargs(int argc, char *argv[],
 			unsigned int v;
 			if (!parse_uint(optarg, &v))
 				return badnum('i');
+			if (v > IMPL_ALL) {
+				uerrf("implementation type is invalid. Must be <= %u", IMPL_ALL);
+				usage();
+				return 1;
+			}
 			if (imptype)
 				*imptype = v;
 			break;

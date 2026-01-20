@@ -3,7 +3,7 @@ PROJECT := connected_components_cuda
 CC := gcc
 
 CFLAGS  := -Wall -Wextra -Wpedantic -O3 -Isrc -fopenmp
-LDFLAGS := -fopenmp
+LDFLAGS := -fopenmp -lm
 
 # Directories
 SRC_DIR := src
