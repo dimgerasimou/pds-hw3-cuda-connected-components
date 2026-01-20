@@ -17,12 +17,21 @@
  *
  * Runs sequentialy, on the CPU, using label propagation.
  *
- * @param[in] mtx  Sparse binary matrix in CSC format
+ * @param[in] mtx  Sparse binary matrix in CSC format.
  *
- * @return  Number of connected components, or -1 on error
+ * @return  Number of connected components, or -1 on error.
  */
 int connected_components_sequential(const Matrix *mtx);
 
+/**
+ * @brief Placeholder to execute correct algorithm based on implementation type.
+ *
+ *
+ * @param[in] mtx  Sparse binary matrix in CSC format.
+ * @param[in] im   Implementation to run.
+ *
+ * @return  Number of connected components, or -1 on error
+ */
 static inline int connected_components(const Matrix *mtx, const unsigned int im) {
 	switch (im) {
 	case IMPL_SEQUENTIAL:
