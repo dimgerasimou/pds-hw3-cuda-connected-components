@@ -21,16 +21,15 @@
  *
  * @return  Number of connected components, or -1 on error
  */
-int connected_commponents_sequential(const Matrix *mtx);
+int connected_components_sequential(const Matrix *mtx);
 
-
-inline int connected_components(const Matrix *mtx, const unsigned int im) {
+static inline int connected_components(const Matrix *mtx, const unsigned int im) {
 	switch (im) {
 	case IMPL_SEQUENTIAL:
-		return connected_commponents_sequential(mtx);
+		return connected_components_sequential(mtx);
 	
 	case IMPL_CUDA:
-		return 0;
+		return -1;
 	
 	default:
 		break;

@@ -268,10 +268,9 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 
 	/* warmup runs */
 	for (unsigned int i = 0; i < b->benchmark_info.wtrials; i++) {
-		long result;
+		int result;
 
-		connected_components(m, im);
-		result = 0;
+		result = connected_components(m, im);
 		if (result < 0) {
 			uerrf("implementation \"%s\" encountered an error", b->results[im].name);
 			return 1;
@@ -282,7 +281,7 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 	time_tot_start = nowsec();
 	for (unsigned int i = 0; i < b->benchmark_info.trials; i++) {
 		double time_start, time_end;
-		long result;
+		int result;
 
 		time_start = nowsec();
 		result = connected_components(m, im);
@@ -298,7 +297,7 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 		if (i == 0)
 			b->results[im].connected_components = result;
 
-		if (result != b->results[im].connected_components)
+		if ((unsigned int) result != b->results[im].connected_components)
 			b->results[im].stable_results = 0;
 	}
 	time_tot_end = nowsec();

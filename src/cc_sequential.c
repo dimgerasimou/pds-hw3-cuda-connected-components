@@ -10,7 +10,6 @@
 #include "cc.h"
 #include "error.h"
 
-
 /**
  * @brief Computes connected components using optimized label propagation.
  *
@@ -29,11 +28,18 @@
  * @return  Number of connected components, or -1 on error
  */
 int
-connected_commponents_sequential(const Matrix *m)
+connected_components_sequential(const Matrix *m)
 {
-	uint32_t *label = malloc(sizeof(uint32_t) * m->nrows);
-	if (!label)
+	if (!m || m->nrows != m->ncols) {
+		DERRF("connected components expects a square adjacency matrix (rows=%zu, cols=%zu)", m ? m->nrows : 0, m ? m->ncols : 0);
 		return -1;
+	}
+
+	uint32_t *label = malloc(sizeof(uint32_t) * m->nrows);
+	if (!label) {
+		DERRNOF("malloc() failed");
+		return -1;
+	}
 	
 	/* Initialize: each node labeled with its own index */
 	for (size_t i = 0; i < m->nrows; i++) {
@@ -76,6 +82,7 @@ connected_commponents_sequential(const Matrix *m)
 	size_t bitmap_size = (m->nrows + 63) / 64;
 	uint64_t *bitmap = calloc(bitmap_size, sizeof(uint64_t));
 	if (!bitmap) {
+		DERRNOF("calloc() failed");
 		free(label);
 		return -1;
 	}
