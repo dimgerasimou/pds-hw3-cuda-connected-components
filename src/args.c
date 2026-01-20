@@ -1,4 +1,3 @@
-
 /**
  * @file args.c
  * @brief Command-line argument parsing implementation.

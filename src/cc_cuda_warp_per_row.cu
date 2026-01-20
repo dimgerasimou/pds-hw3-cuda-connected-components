@@ -1,10 +1,6 @@
 /**
- * @file cc_cuda_thread_per_vertex.cu
- * @brief CUDA Connected Components: Union-Find (single-pass), Thread-per-Vertex
- *
- * Correctness fix:
- * - Union uses atomicCAS on ROOTS ONLY (no atomicMin), preventing missed merges.
- * - Compression runs until stable before counting roots.
+ * @file cc_cuda_warp_per_row.cu
+ * @brief CUDA Connected Components: Union-Find (single-pass), Warp-per-Row traversal
  */
 
 #include <cuda_runtime.h>
@@ -23,7 +19,6 @@
 	} \
 } while (0)
 
-/* Safety cap for compression iterations (should converge far earlier). */
 #ifndef UF_COMPRESS_MAX_ITERS
 #define UF_COMPRESS_MAX_ITERS 256UL
 #endif
@@ -33,7 +28,6 @@
 static __device__ __forceinline__ uint32_t
 uf_find_halving(uint32_t *parent, uint32_t x)
 {
-	/* Path halving: parent[x] = parent[parent[x]] */
 	while (1) {
 		uint32_t p = parent[x];
 		if (p == x)
@@ -44,14 +38,6 @@ uf_find_halving(uint32_t *parent, uint32_t x)
 	}
 }
 
-/*
- * Correct parallel union-by-index:
- * - Compute roots ra, rb.
- * - Attempt to hook higher root -> lower root using atomicCAS(parent[hi], hi, lo).
- * - If CAS fails, roots changed; recompute and retry.
- *
- * This guarantees we only change parent pointers of actual roots.
- */
 static __device__ __forceinline__ void
 uf_union_by_index_cas(uint32_t *parent, uint32_t a, uint32_t b)
 {
@@ -62,17 +48,12 @@ uf_union_by_index_cas(uint32_t *parent, uint32_t a, uint32_t b)
 		uint32_t hi = (ra > rb) ? ra : rb;
 		uint32_t lo = (ra > rb) ? rb : ra;
 
-		/* Hook hi -> lo iff hi_toggle is still a root (parent[hi] == hi). */
 		uint32_t old = (uint32_t)atomicCAS((unsigned int *)&parent[hi],
 		                                   (unsigned int)hi,
 		                                   (unsigned int)lo);
-
-		if (old == hi) {
-			/* successful union */
+		if (old == hi)
 			return;
-		}
 
-		/* Another thread changed hi (or it wasn't root). Recompute roots and retry. */
 		ra = uf_find_halving(parent, ra);
 		rb = uf_find_halving(parent, rb);
 	}
@@ -88,27 +69,32 @@ uf_init(uint32_t *parent, uint32_t n)
 		parent[tid] = tid;
 }
 
+/*
+ * Warp-per-row:
+ * - One warp handles one vertex u.
+ * - Lanes stride through adjacency list.
+ */
 static __global__ void
-uf_union_thread_per_vertex(const uint32_t *colptr, const uint32_t *rowi,
-                           uint32_t *parent, uint32_t nrows)
+uf_union_warp_per_row(const uint32_t *colptr, const uint32_t *rowi,
+                      uint32_t *parent, uint32_t nrows)
 {
-	uint32_t u = blockIdx.x * blockDim.x + threadIdx.x;
+	const uint32_t global_tid = blockIdx.x * blockDim.x + threadIdx.x;
+	const uint32_t lane = threadIdx.x & 31u;
+	const uint32_t warp = global_tid >> 5; /* /32 */
+
+	const uint32_t u = warp;
 	if (u >= nrows)
 		return;
 
-	uint32_t start = colptr[u];
-	uint32_t end   = colptr[u + 1];
+	const uint32_t start = colptr[u];
+	const uint32_t end   = colptr[u + 1];
 
-	for (uint32_t i = start; i < end; i++) {
+	for (uint32_t i = start + lane; i < end; i += 32u) {
 		uint32_t v = rowi[i];
 		uf_union_by_index_cas(parent, u, v);
 	}
 }
 
-/*
- * Compress all nodes to their roots. Also sets *changed if any parent updates.
- * Loop this on host until stable to guarantee correct root counting.
- */
 static __global__ void
 uf_compress_all_changed(uint32_t *parent, int *changed, uint32_t nrows)
 {
@@ -125,6 +111,7 @@ uf_compress_all_changed(uint32_t *parent, int *changed, uint32_t nrows)
 	}
 }
 
+/* Count only true roots: parent[i] == i */
 static __global__ void
 cc_count_roots_only(const uint32_t *parent, unsigned long long *bitmap, uint32_t nrows)
 {
@@ -133,7 +120,7 @@ cc_count_roots_only(const uint32_t *parent, unsigned long long *bitmap, uint32_t
 		return;
 
 	if (parent[tid] != tid)
-		return; /* not a root */
+		return;
 
 	unsigned int word = tid >> 6;
 	unsigned int bit  = tid & 63u;
@@ -151,7 +138,7 @@ cc_popcount(const unsigned long long *bitmap, uint32_t *count, uint32_t bitmap_s
 /* ---------- host entry ---------- */
 
 int
-connected_components_cuda_thread_per_vertex(const Matrix *mtx)
+connected_components_cuda_warp_per_row(const Matrix *mtx)
 {
 	if (!mtx || mtx->nrows != mtx->ncols) {
 		DERRF("expected square adjacency matrix");
@@ -162,7 +149,6 @@ connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 		return -1;
 	}
 
-	/* Enforce 32-bit indexability (rowi/colptr are uint32_t anyway). */
 	if (mtx->nrows > (size_t)UINT32_MAX || mtx->ncols > (size_t)UINT32_MAX || mtx->nnz > (size_t)UINT32_MAX) {
 		DERRF("matrix too large for 32-bit indices (n=%zu, nnz=%zu)", mtx->nrows, mtx->nnz);
 		return -1;
@@ -191,29 +177,29 @@ connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 	CUDA_CHECK(cudaMemcpy(d_rowi, mtx->rowi, (size_t)nnz * sizeof(uint32_t),
 	                      cudaMemcpyHostToDevice));
 
-	const int threads = 256;
-	const int blocks_v = (int)((nrows + (uint32_t)threads - 1) / (uint32_t)threads);
+	/* Launch geometry: total warps = nrows, threads = warps*32 */
+	const int threads = 256; /* must be multiple of 32 */
+	const uint32_t warps_per_block = (uint32_t)threads / 32u;
+	const uint32_t nwarps = nrows;
+	const int blocks = (int)((nwarps + warps_per_block - 1) / warps_per_block);
 
-	uf_init<<<blocks_v, threads>>>(d_parent, nrows);
+	uf_init<<<(int)((nrows + (uint32_t)threads - 1) / (uint32_t)threads), threads>>>(d_parent, nrows);
 	CUDA_CHECK(cudaGetLastError());
 	CUDA_CHECK(cudaDeviceSynchronize());
 
-	/* single union pass over all edges */
-	uf_union_thread_per_vertex<<<blocks_v, threads>>>(d_colptr, d_rowi, d_parent, nrows);
+	uf_union_warp_per_row<<<blocks, threads>>>(d_colptr, d_rowi, d_parent, nrows);
 	CUDA_CHECK(cudaGetLastError());
 	CUDA_CHECK(cudaDeviceSynchronize());
 
-	/* compress until stable (guarantees correct counting) */
+	/* compress until stable */
 	unsigned long comp_iters = 0;
 	int h_changed = 1;
+	const int blocks_v = (int)((nrows + (uint32_t)threads - 1) / (uint32_t)threads);
 
 	while (h_changed) {
 		if (comp_iters++ >= UF_COMPRESS_MAX_ITERS) {
 			DERRF("compression did not converge within UF_COMPRESS_MAX_ITERS=%lu", (unsigned long)UF_COMPRESS_MAX_ITERS);
-			cudaFree(d_colptr);
-			cudaFree(d_rowi);
-			cudaFree(d_parent);
-			cudaFree(d_changed);
+			cudaFree(d_colptr); cudaFree(d_rowi); cudaFree(d_parent); cudaFree(d_changed);
 			return -1;
 		}
 
@@ -223,11 +209,10 @@ connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 		uf_compress_all_changed<<<blocks_v, threads>>>(d_parent, d_changed, nrows);
 		CUDA_CHECK(cudaGetLastError());
 		CUDA_CHECK(cudaDeviceSynchronize());
-
 		CUDA_CHECK(cudaMemcpy(&h_changed, d_changed, sizeof(int), cudaMemcpyDeviceToHost));
 	}
 
-	/* count roots via bitmap */
+	/* count roots */
 	const uint32_t bitmap_size = (nrows + 63u) / 64u;
 	unsigned long long *d_bitmap = NULL;
 	uint32_t *d_count = NULL;
@@ -257,4 +242,3 @@ connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 
 	return (int)h_count;
 }
-

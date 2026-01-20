@@ -23,7 +23,7 @@ NVCC ?= $(CUDA_HOME)/bin/nvcc
 # ---------- Flags ----------
 CPPFLAGS  ?=
 CFLAGS    ?= -Wall -Wextra -Wpedantic -O3 -fopenmp
-NVCCFLAGS ?= -O3 -Xcompiler=-fopenmp
+NVCCFLAGS ?= -O3 -Xcompiler=-fopenmp --use_fast_math
 LDFLAGS   ?= -Xcompiler=-fopenmp
 LDLIBS    ?= -lm -lcudart
 

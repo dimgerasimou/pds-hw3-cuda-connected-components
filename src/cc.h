@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-int connected_components_sequential(const Matrix *mtx, unsigned long *iterations);
+int connected_components_sequential(const Matrix *mtx);
 
 /**
  * @brief Connected components using one thread per vertex.
@@ -24,7 +24,7 @@ int connected_components_sequential(const Matrix *mtx, unsigned long *iterations
  * @param[in] mtx  Sparse binary matrix in CSC format (adjacency matrix).
  * @return Number of connected components, or -1 on error.
  */
-int connected_components_cuda_thread_per_vertex(const Matrix *mtx, unsigned long *iterations);
+int connected_components_cuda_thread_per_vertex(const Matrix *mtx);
 
 /**
  * @brief Connected components using one warp per row.
@@ -36,7 +36,7 @@ int connected_components_cuda_thread_per_vertex(const Matrix *mtx, unsigned long
  * @param[in] mtx  Sparse binary matrix in CSC format (adjacency matrix).
  * @return Number of connected components, or -1 on error.
  */
-// int connected_components_cuda_warp_per_row(const Matrix *mtx);
+int connected_components_cuda_warp_per_row(const Matrix *mtx);
 
 /**
  * @brief Connected components using one block per row.
@@ -48,7 +48,7 @@ int connected_components_cuda_thread_per_vertex(const Matrix *mtx, unsigned long
  * @param[in] mtx  Sparse binary matrix in CSC format (adjacency matrix).
  * @return Number of connected components, or -1 on error.
  */
-// int connected_components_cuda_block_per_row(const Matrix *mtx);
+int connected_components_cuda_block_per_row(const Matrix *mtx);
 
 /**
  * @brief Dispatcher to execute correct algorithm based on implementation type.
@@ -58,21 +58,19 @@ int connected_components_cuda_thread_per_vertex(const Matrix *mtx, unsigned long
  *
  * @return  Number of connected components, or -1 on error
  */
-static inline int connected_components(const Matrix *mtx, const unsigned int im, unsigned long *iterations) {
+static inline int connected_components(const Matrix *mtx, const unsigned int im) {
 	switch (im) {
 	case IMPL_SEQUENTIAL:
-		return connected_components_sequential(mtx, iterations);
+		return connected_components_sequential(mtx);
 	
 	case IMPL_CUDA_THREAD_PER_VERTEX:
-		return connected_components_cuda_thread_per_vertex(mtx, iterations);
+		return connected_components_cuda_thread_per_vertex(mtx);
 	
 	case IMPL_CUDA_WARP_PER_ROW:
-		return 0;
-		// return connected_components_cuda_warp_per_row(mtx);
+		return connected_components_cuda_warp_per_row(mtx);
 	
 	case IMPL_CUDA_BLOCK_PER_ROW:
-		return 0;
-		// return connected_components_cuda_block_per_row(mtx);
+		return connected_components_cuda_block_per_row(mtx);
 	
 	default:
 		break;

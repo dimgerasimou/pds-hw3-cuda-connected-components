@@ -1,4 +1,3 @@
-
 /**
  * @file error.h
  * @brief Error handling and reporting utilities.

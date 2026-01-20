@@ -1,6 +1,6 @@
 /**
  * @file cc_sequential.c
- * @brief Optimized label propagation sequential algorithm
+ * @brief Optimized union-find sequential algorithm
  *        for computing connected components.
  */
 
@@ -11,97 +11,113 @@
 #include "error.h"
 
 /**
- * @brief Computes connected components using optimized label propagation.
+ * @brief Finds the root of a node with path halving optimization.
+ *
+ * Path halving is a one-pass variant of path compression that makes every
+ * node point to its grandparent, effectively halving the path length on
+ * each traversal. This provides nearly the same performance as full path
+ * compression with less overhead.
+ *
+ * @param[in,out] label Array where label[i] is the parent of node i.
+ * @param[in]     i     Node to find root for.
+ *
+ * @return Root node (where label[root] == root)
+ */
+static inline uint32_t
+find_root_halving(uint32_t *label, uint32_t i)
+{
+	while (label[i] != i) {
+		label[i] = label[label[i]]; /* Path halving: skip one level */
+		i = label[i];
+	}
+	return i;
+}
+
+/**
+ * @brief Unites two nodes by attaching their roots.
+ *
+ * This performs union-by-index, where the root with the larger index is
+ * always attached to the root with the smaller index. This maintains a
+ * canonical form where component representatives are always the minimum
+ * node index in each component.
+ *
+ * @param[in,out] label Array of parent pointers.
+ * @param[in]     i     First node.
+ * @param[in]     j     Second node.
+ *
+ * @return 1 if union was performed, 0 if nodes already in same set
+ */
+static inline int
+union_nodes_by_index(uint32_t *label, uint32_t i, uint32_t j)
+{
+	uint32_t root_i = find_root_halving(label, i);
+	uint32_t root_j = find_root_halving(label, j);
+	
+	if (root_i == root_j)
+		return 0;
+	
+	/* Attach larger index to smaller (maintains canonical form) */
+	if (root_i < root_j) {
+		label[root_j] = root_i;
+	} else {
+		label[root_i] = root_j;
+	}
+	return 1;
+}
+
+/**
+ * @brief Computes connected components using union-find algorithm.
  *
  * Algorithm steps:
- * 1. Initialize each node with its own index as label
- * 2. Iterate over all edges, propagating minimum labels
- * 3. Use cached column label to reduce redundant reads
- * 4. Repeat until no labels change (convergence)
- * 5. Count unique components using bitmap with hardware popcount
+ * 1. Initialize each node as its own parent (singleton sets)
+ * 2. For each edge (i,j), union the sets containing i and j
+ * 3. Perform final path compression to flatten all trees
+ * 4. Count nodes that are their own parent (roots = components)
  *
- * Optimization: Cache the column label in the inner loop to avoid
- * redundant memory reads when processing multiple edges in the same column.
- *
- * @param m  Sparse binary matrix in CSC format representing graph
- *
- * @return  Number of connected components, or -1 on error
+ * @param[in]  m          Sparse binary matrix in CSC format representing graph.
+ * @param[out] iterations Iterations needed by the algorithm to converge
+ *                        (always 1 in this union find)
+ * @return Number of connected components, or -1 on error
  */
 int
-connected_components_sequential(const Matrix *m, unsigned long *iterations)
+connected_components_sequential(const Matrix *m)
 {
 	if (!m || m->nrows != m->ncols) {
 		DERRF("connected components expects a square adjacency matrix (rows=%zu, cols=%zu)", m ? m->nrows : 0, m ? m->ncols : 0);
 		return -1;
 	}
 
-	uint32_t *label = malloc(sizeof(uint32_t) * m->nrows);
+	uint32_t *label = malloc(m->nrows * sizeof(uint32_t));
 	if (!label) {
 		DERRNOF("malloc() failed");
 		return -1;
 	}
 	
-	/* Initialize: each node labeled with its own index */
+	/* Initialize: each node is its own parent */
 	for (size_t i = 0; i < m->nrows; i++) {
 		label[i] = i;
 	}
 	
-	/* Iterate until convergence */
-	uint8_t finished;
-	*iterations = 0;
-	do {
-		finished = 1;
-		
-		/* Process all edges, propagating minimum labels */
-		for (size_t i = 0; i < m->ncols; i++) {
-			uint32_t col_label = label[i];  /* Cache column label */
-			
-			for (uint32_t j = m->colptr[i]; j < m->colptr[i + 1]; j++) {
-				uint32_t row = m->rowi[j];
-				uint32_t row_label = label[row];
-				
-				if (col_label != row_label) {
-					uint32_t min_label = col_label < row_label ? col_label : row_label;
-					
-					/* Update column label if needed (and cache it) */
-					if (col_label > min_label) {
-						label[i] = col_label = min_label;
-						finished = 0;
-					}
-					
-					/* Update row label if needed */
-					if (row_label > min_label) {
-						label[row] = min_label;
-						finished = 0;
-					}
-				}
-			}
+	/* Process all edges: union connected nodes */
+	for (size_t i = 0; i < m->ncols; i++) {
+		for (uint32_t j = m->colptr[i]; j < m->colptr[i + 1]; j++) {
+			union_nodes_by_index(label, i, m->rowi[j]);
 		}
-		(*iterations)++;
-	} while (!finished);
-	
-	/* Count unique components using a bitmap */
-	size_t bitmap_size = (m->nrows + 63) / 64;
-	uint64_t *bitmap = calloc(bitmap_size, sizeof(uint64_t));
-	if (!bitmap) {
-		DERRNOF("calloc() failed");
-		free(label);
-		return -1;
 	}
 	
-	/* Bitmap construction: set bit for each unique label */
-	for (uint32_t i = 0; i < m->nrows; i++) {
-		uint32_t val = label[i];
-		bitmap[val >> 6] |= (1ULL << (val & 63));
+	/* Final compression pass: flatten all paths for accurate counting */
+	for (size_t i = 0; i < m->nrows; i++) {
+		find_root_halving(label, i);
 	}
 	
-	/* Count set bits using hardware popcount */
-	uint32_t count = 0;
-	for (size_t i = 0; i < bitmap_size; i++) {
-		count += __builtin_popcountll(bitmap[i]);
+	/* Count roots (each root represents one component) */
+	uint32_t unique_count = 0;
+	for (size_t i = 0; i < m->nrows; i++) {
+		if (label[i] == i) {
+			unique_count++;
+		}
 	}
 	
 	free(label);
-	free(bitmap);
-	return (int)count;
+	return (int)unique_count;
 }

@@ -9,7 +9,6 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include <errno.h>
 #include <omp.h>
 #include <stdint.h>
 #include <stdio.h>

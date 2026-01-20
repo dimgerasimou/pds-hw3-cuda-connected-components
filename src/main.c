@@ -12,8 +12,6 @@
  * Usage: ./connected_components [-n trials] [-w wtrials] [-i imptype] ./data_filepath
  */
 
-#include <stdlib.h>
-
 #include "args.h"
 #include "benchmark.h"
 #include "error.h"
