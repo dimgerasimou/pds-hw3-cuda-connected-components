@@ -21,7 +21,12 @@
 #include "error.h"
 #include "json.h"
 
-const char *implementation_names[] = { "Sequential implementation (CPU)", "CUDA implementation" };
+const char *implementation_names[] = {
+	"CPU: Sequential",
+	"CUDA: Thread-per-Vertex",
+	"CUDA: Warp-per-Row",
+	"CUDA: Block-per-Row"
+};
 
 /* ------------------------------------------------------------------------- */
 /*                            Static Helper Functions                        */

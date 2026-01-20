@@ -14,6 +14,11 @@
 #include <stdarg.h>
 #include <errno.h>
 
+#pragma once
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Initalize error reporting.
  *
@@ -125,6 +130,10 @@ void derrf_at(const char *file, int line, const char *func,
  */
 #define DERRF(fmt, ...)    derrf_at(__FILE__, __LINE__, __func__, 0, (fmt), ##__VA_ARGS__)
 #define DERRNOF(fmt, ...)  derrf_at(__FILE__, __LINE__, __func__, errno, (fmt), ##__VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* ERROR_H */
 

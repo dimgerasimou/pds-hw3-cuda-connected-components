@@ -164,11 +164,6 @@ parseargs(int argc, char *argv[],
 			unsigned int v;
 			if (!parse_uint(optarg, &v))
 				return badnum('w');
-			if (v == 0) {
-				uerrf("warmup trials must be > 0");
-				usage();
-				return 1;
-			}
 			if (wtrials)
 				*wtrials = v;
 			break;

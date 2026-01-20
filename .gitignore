@@ -2,3 +2,7 @@
 bin/
 obj/
 data/
+
+# code editor artifacts
+compile_commands.json
+.cache/
