@@ -18,7 +18,7 @@
  *   -n <trials>   Number of trials
  *   -w <wtrials>  Number of warmup trials
  *   -i <imptype>  Implementation type
- *   -h             Show usage and exit
+ *   -h            Show usage and exit
  *
  * Arguments:
  * filepath Path to the input matrix file (Matrix Market format)

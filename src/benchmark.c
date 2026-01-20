@@ -17,11 +17,11 @@
 #include <time.h>
 
 #include "benchmark.h"
-/* #include "connected_components.h" */
+#include "cc.h"
 #include "error.h"
 #include "json.h"
 
-const char *implementation_names[] = { "Serial implementation (CPU)", "CUDA implementation" };
+const char *implementation_names[] = { "Sequential implementation (CPU)", "CUDA implementation" };
 
 /* ------------------------------------------------------------------------- */
 /*                            Static Helper Functions                        */
@@ -270,7 +270,7 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 	for (unsigned int i = 0; i < b->benchmark_info.wtrials; i++) {
 		long result;
 
-		// do cc
+		connected_components(m, im);
 		result = 0;
 		if (result < 0) {
 			uerrf("implementation \"%s\" encountered an error", b->results[im].name);
@@ -285,8 +285,7 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 		long result;
 
 		time_start = nowsec();
-		// do cc
-		result = 0;
+		result = connected_components(m, im);
 		time_end = nowsec();
 
 		if (result < 0) {

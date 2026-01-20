@@ -17,7 +17,7 @@
  * @note IMPL_ALL provides the count of all implementations.
  */
 enum {
-	IMPL_SERIAL = 0,
+	IMPL_SEQUENTIAL = 0,
 	IMPL_CUDA,
 	IMPL_ALL
 };

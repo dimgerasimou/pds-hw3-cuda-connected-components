@@ -29,7 +29,6 @@ main(int argc, char *argv[])
 {
 	Matrix *mtx;
 	Benchmark *bench;
-	int result;
 	double load_time;
 
 	/* cmdline args */
