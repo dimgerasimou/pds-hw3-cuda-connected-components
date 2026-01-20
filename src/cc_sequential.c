@@ -28,7 +28,7 @@
  * @return  Number of connected components, or -1 on error
  */
 int
-connected_components_sequential(const Matrix *m)
+connected_components_sequential(const Matrix *m, unsigned long *iterations)
 {
 	if (!m || m->nrows != m->ncols) {
 		DERRF("connected components expects a square adjacency matrix (rows=%zu, cols=%zu)", m ? m->nrows : 0, m ? m->ncols : 0);
@@ -48,6 +48,7 @@ connected_components_sequential(const Matrix *m)
 	
 	/* Iterate until convergence */
 	uint8_t finished;
+	*iterations = 0;
 	do {
 		finished = 1;
 		
@@ -76,6 +77,7 @@ connected_components_sequential(const Matrix *m)
 				}
 			}
 		}
+		(*iterations)++;
 	} while (!finished);
 	
 	/* Count unique components using a bitmap */

@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-int connected_components_sequential(const Matrix *mtx);
+int connected_components_sequential(const Matrix *mtx, unsigned long *iterations);
 
 /**
  * @brief Connected components using one thread per vertex.
@@ -24,7 +24,7 @@ int connected_components_sequential(const Matrix *mtx);
  * @param[in] mtx  Sparse binary matrix in CSC format (adjacency matrix).
  * @return Number of connected components, or -1 on error.
  */
-int connected_components_cuda_thread_per_vertex(const Matrix *mtx);
+int connected_components_cuda_thread_per_vertex(const Matrix *mtx, unsigned long *iterations);
 
 /**
  * @brief Connected components using one warp per row.
@@ -58,13 +58,13 @@ int connected_components_cuda_thread_per_vertex(const Matrix *mtx);
  *
  * @return  Number of connected components, or -1 on error
  */
-static inline int connected_components(const Matrix *mtx, const unsigned int im) {
+static inline int connected_components(const Matrix *mtx, const unsigned int im, unsigned long *iterations) {
 	switch (im) {
 	case IMPL_SEQUENTIAL:
-		return connected_components_sequential(mtx);
+		return connected_components_sequential(mtx, iterations);
 	
 	case IMPL_CUDA_THREAD_PER_VERTEX:
-		return connected_components_cuda_thread_per_vertex(mtx);
+		return connected_components_cuda_thread_per_vertex(mtx, iterations);
 	
 	case IMPL_CUDA_WARP_PER_ROW:
 		return 0;

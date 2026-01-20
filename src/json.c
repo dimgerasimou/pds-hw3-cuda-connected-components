@@ -93,6 +93,7 @@ print_one_result(const Result *r, const unsigned int indent_level)
 	printf("%*s},\n", indent_level + 2, "");
 
 	printf("%*s\"throughput_edges_per_sec\": %.2f\n", indent_level + 2, "", r->throughput_edges_per_sec);
+	printf("%*s\"iterations\": %lu\n", indent_level + 2, "", r->iterations);
 
 	printf("%*s}", indent_level, "");
 }

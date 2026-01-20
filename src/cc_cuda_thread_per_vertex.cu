@@ -96,7 +96,7 @@ cc_popcount(const unsigned long long *bitmap, uint32_t *count, uint32_t bitmap_s
 }
 
 int
-connected_components_cuda_thread_per_vertex(const Matrix *mtx)
+connected_components_cuda_thread_per_vertex(const Matrix *mtx, unsigned long *iterations)
 {
 	if (!mtx || mtx->nrows != mtx->ncols) {
 		DERRF("expected square adjacency matrix");
@@ -141,7 +141,7 @@ connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 	int blocks = (int)((nrows + (uint32_t)threads_per_block - 1) / (uint32_t)threads_per_block);
 
 	int h_changed;
-	int iterations = 0;
+	*iterations = 0;
 
 	do {
 		h_changed = 0;
@@ -158,7 +158,7 @@ connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 		CUDA_CHECK(cudaMemcpy(&h_changed, d_changed, sizeof(int),
 		                      cudaMemcpyDeviceToHost));
 
-		iterations++;
+		(*iterations)++;
 	} while (h_changed);
 
 	/* Count components using bitmap */

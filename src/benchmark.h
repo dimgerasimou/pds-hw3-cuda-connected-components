@@ -54,6 +54,7 @@ typedef struct {
 	Statistics stats;                  /**< Timing statistics */
 	double throughput_edges_per_sec;   /**< Processing throughput in edges per second */
 	double *times;                     /**< Array of trial execution times in seconds. */
+	unsigned long iterations;          /**< Itarations needed to converge. */
 } Result;
 
 /**
