@@ -24,7 +24,8 @@ const char *implementation_names[] = {
 	"CPU: Sequential",
 	"CUDA: Thread-per-Vertex",
 	"CUDA: Warp-per-Row",
-	"CUDA: Block-per-Row"
+	"CUDA: Block-per-Row",
+	"CUDA: Afforest"
 };
 
 /* ------------------------------------------------------------------------- */

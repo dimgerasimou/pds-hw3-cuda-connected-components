@@ -50,6 +50,9 @@ int connected_components_cuda_warp_per_row(const Matrix *mtx);
  */
 int connected_components_cuda_block_per_row(const Matrix *mtx);
 
+int connected_components_cuda_afforest(const Matrix *mtx);
+
+
 /**
  * @brief Dispatcher to execute correct algorithm based on implementation type.
  *
@@ -71,6 +74,9 @@ static inline int connected_components(const Matrix *mtx, const unsigned int im)
 	
 	case IMPL_CUDA_BLOCK_PER_ROW:
 		return connected_components_cuda_block_per_row(mtx);
+	
+	case IMPL_CUDA_AFFOREST:
+		return connected_components_cuda_afforest(mtx);
 	
 	default:
 		break;

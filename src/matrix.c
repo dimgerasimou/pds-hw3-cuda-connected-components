@@ -2,9 +2,16 @@
  * @file matrix.c
  * @brief CSC (Compressed Sparse Column) binary matrix utilities.
  *
- * Provides functionality to read and free sparse binary matrices
- * stored in CSC format. Non-zero values are represented implicitly as 1.
- * Reads from .mtx files.
+ * Reads MatrixMarket .mtx files into CSC. Values are treated structurally (nonzero => 1).
+ *
+ * Important optimization for undirected graphs:
+ *  - If the input is undirected (MatrixMarket symmetry != "general") OR the env var
+ *      CC_UNDIRECTED=1
+ *    is set, then we store each undirected edge only once by canonicalizing (i,j) into:
+ *      col = max(i,j), row = min(i,j)   (skip i==j)
+ *
+ * This reduces nnz ~2x for symmetric/general-undirected inputs and removes the need
+ * for per-edge filtering in CUDA kernels.
  */
 
 #define _POSIX_C_SOURCE 200809L
@@ -14,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>   /* <-- needed for errno/strtoull/strtod */
 
 #include "matrix.h"
 #include "error.h"
@@ -84,8 +92,7 @@ parse_coord_line(const char *line, size_t nrows, size_t ncols,
 		return 1;
 	}
 
-	/* For non-pattern, parse the next token as double and check != 0.
-	   Correctness > micro-optimizations here; strtod is fine. */
+	/* For non-pattern, parse the next token as double and check != 0. */
 	while (*line == ' ' || *line == '\t' || *line == '\r')
 		line++;
 
@@ -111,6 +118,19 @@ unique_u32(uint32_t *a, size_t n)
 			a[w++] = a[r];
 	}
 	return w;
+}
+
+static int
+env_truthy(const char *name)
+{
+	const char *v = getenv(name);
+	if (!v || !*v) return 0;
+	/* accept: 1, true, yes, on (case-insensitive-ish) */
+	if (v[0] == '1') return 1;
+	if (v[0] == 't' || v[0] == 'T') return 1;
+	if (v[0] == 'y' || v[0] == 'Y') return 1;
+	if (v[0] == 'o' || v[0] == 'O') return 1; /* "on" */
+	return 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -176,7 +196,14 @@ matrixload(const char *path)
 		return NULL;
 	}
 
-	int expand = (!general); /* symmetric/skew/hermitian -> expand structurally */
+	/* Decide undirected canonicalization mode:
+	   - symmetric/skew/hermitian imply undirected structure
+	   - or user forces with env var CC_UNDIRECTED=1
+	*/
+	int undirected = (!general) || env_truthy("CC_UNDIRECTED");
+
+	/* In undirected mode, we DO NOT expand. We store each edge once as (min -> max). */
+	int expand = 0;
 
 	/* --- Skip comments and read size line ------------------------------ */
 	size_t nrows = 0, ncols = 0;
@@ -234,9 +261,15 @@ matrixload(const char *path)
 		}
 		if (!nonzero) continue;
 
-		colcnt[j]++;
-		if (expand && i != j)
-			colcnt[i]++;
+		if (undirected) {
+			if (i == j) continue; /* drop self loops */
+			uint32_t hi = (i < j) ? j : i;
+			colcnt[hi]++;         /* store in column hi, row lo */
+		} else {
+			colcnt[j]++;
+			if (expand && i != j)
+				colcnt[i]++;
+		}
 	}
 
 	/* Build colptr via prefix sum */
@@ -267,7 +300,6 @@ matrixload(const char *path)
 	}
 
 	/* --- Pass 2: fill row indices ------------------------------------- */
-	/* rewind and re-read to after size line */
 	if (fseek(f, 0, SEEK_SET) != 0) {
 		DERRF("fseek failed");
 		free(rowi);
@@ -293,8 +325,7 @@ matrixload(const char *path)
 		}
 		if (line[0] == '%')
 			continue;
-		/* this is the size line */
-		break;
+		break; /* size line */
 	}
 
 	/* next[c] starts at colptr[c] */
@@ -326,9 +357,16 @@ matrixload(const char *path)
 		}
 		if (!nonzero) continue;
 
-		rowi[next[j]++] = i;
-		if (expand && i != j)
-			rowi[next[i]++] = j;
+		if (undirected) {
+			if (i == j) continue;
+			uint32_t lo = (i < j) ? i : j;
+			uint32_t hi = (i < j) ? j : i;
+			rowi[next[hi]++] = lo;
+		} else {
+			rowi[next[j]++] = i;
+			if (expand && i != j)
+				rowi[next[i]++] = j;
+		}
 	}
 
 	free(next);
@@ -336,7 +374,7 @@ matrixload(const char *path)
 	free(line);
 	fclose(f);
 
-	/* --- Sort + dedup per column (parallel-friendly, simple) ----------- */
+	/* --- Sort + dedup per column -------------------------------------- */
 	int T = 1;
 #ifdef _OPENMP
 	T = omp_get_max_threads();
@@ -354,7 +392,6 @@ matrixload(const char *path)
 	/* Dedup requires compaction + new colptr (simple 2-pass) */
 	size_t *uniqcnt = (size_t *)calloc(ncols, sizeof(size_t));
 	if (!uniqcnt) {
-		/* return sorted (not deduped) */
 		Matrix *m = (Matrix *)calloc(1, sizeof(Matrix));
 		if (!m) { free(rowi); free(colptr); return NULL; }
 		m->nrows = nrows; m->ncols = ncols; m->nnz = nnz;
@@ -456,6 +493,5 @@ matrixfree(Matrix *matrix)
 	}
 
 	free(matrix);
-	matrix = NULL;
 }
 
