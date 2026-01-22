@@ -19,6 +19,16 @@
 void print_sys_info(const SystemInfo *info, const unsigned int indent_level);
 
 /**
+ * @brief Print cuda device information as formatted JSON.
+ *
+ * @param[in] gpu_info     Pointer to CudaDeviceInfo structure to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ *
+ * @note Output is written to stdout.
+ */
+void print_gpu_info(const CudaDeviceInfo *gpu_info, const unsigned int indent_level);
+
+/**
  * @brief Print matrix information as formatted JSON.
  *
  * @param[in] info         Pointer to MatrixInfo structure to print.

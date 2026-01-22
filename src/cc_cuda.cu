@@ -494,6 +494,42 @@ cleanup:
 /* ------------------------------------------------------------------------- */
 
 int
+getcudadeviceinfo(CudaDeviceInfo *info)
+{
+	cudaDeviceProp prop;
+	int devcount;
+
+	if (!info) {
+		DERRF("info struct is invalid");
+		return -1;
+	}
+
+	memset(info, 0, sizeof(*info));
+	info->available = 0;
+
+	devcount = 0;
+	CUDA_CHECK_GOTO(cudaGetDeviceCount(&devcount), infoerr);
+
+	if (devcount <= 0) {
+		DERRF("device count is invalid");
+		return -1;
+	}
+
+	CUDA_CHECK_GOTO(cudaGetDeviceProperties(&prop, 0), infoerr);
+
+	info->available = 1;
+	snprintf(info->name, sizeof(info->name), "%s", prop.name);
+	info->cc_major = prop.major;
+	info->cc_minor = prop.minor;
+	info->vram_gb = prop.totalGlobalMem / 1024.0 / 1024.0 / 1024.0;
+
+	return 0;
+
+infoerr:
+	return -1;
+}
+
+int
 connected_components_cuda_thread_per_vertex(const Matrix *mtx)
 {
 	return cc_cuda_run_uf(mtx, 0, 0);

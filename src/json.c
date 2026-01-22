@@ -37,8 +37,25 @@ print_sys_info(const SystemInfo *info, const unsigned int indent_level)
 	printf("%*s\"cpu_info\": ", indent_level + 2, "");
 	json_print_escaped(info->cpu_info);
 	printf(",\n");
-	printf("%*s\"ram_mb\": %.2f,\n", indent_level + 2, "", info->ram_mb);
-	printf("%*s\"swap_mb\": %.2f\n", indent_level + 2, "", info->swap_mb);
+	printf("%*s\"ram_gb\": %.2f,\n", indent_level + 2, "", info->ram_gb);
+	printf("%*s\"swap_gb\": %.2f\n", indent_level + 2, "", info->swap_gb);
+	printf("%*s}", indent_level, "");
+}
+
+void
+print_gpu_info(const CudaDeviceInfo *gpu_info, const unsigned int indent_level)
+{
+	printf("%*s\"gpu_info\": {\n", indent_level, "");
+	printf("%*s\"available\": %s", indent_level + 2, "", gpu_info->available ? "true" : "false");
+		
+	if (gpu_info->available) {
+		printf(",\n%*s\"name\": ", indent_level + 2, "");
+		json_print_escaped(gpu_info->name);
+		printf(",\n%*s\"cc\": \"%d.%d\",\n", indent_level + 2, "", gpu_info->cc_major, gpu_info->cc_minor);
+		printf("%*s\"vram_gb\": %.2f\n", indent_level + 2, "", gpu_info->vram_gb);
+	} else {
+		printf("\n");
+	}
 	printf("%*s}", indent_level, "");
 }
 

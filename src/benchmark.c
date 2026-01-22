@@ -116,10 +116,10 @@ getmeminfo(Benchmark *b)
 {
 	struct sysinfo info;
 	if (sysinfo(&info) == 0) {
-		b->sys_info.ram_mb  = info.totalram  / 1024.0 / 1024.0 * info.mem_unit;
-		b->sys_info.swap_mb = info.totalswap / 1024.0 / 1024.0 * info.mem_unit;
+		b->sys_info.ram_gb  = info.totalram  / 1024.0 / 1024.0 / 1024.0 * info.mem_unit;
+		b->sys_info.swap_gb = info.totalswap / 1024.0 / 1024.0 / 1024.0 * info.mem_unit;
 	} else {
-		b->sys_info.ram_mb = b->sys_info.swap_mb = 0.0;
+		b->sys_info.ram_gb = b->sys_info.swap_gb = 0.0;
 	}
 }
 
@@ -351,13 +351,24 @@ benchmarkprint(Benchmark *b)
 
 	if (b->benchmark_info.imptype == IMPL_ALL) {
 		for (unsigned int i = 0; i < IMPL_ALL; i++) {
-			calcstatistics(b, i);
+			if (calcstatistics(b, i))
+				return;
+				
 			b->results[i].throughput_edges_per_sec = b->matrix_info.nnz / b->results[i].stats.mean_time_s;
 		}
 	} else {
 		unsigned int im = b->benchmark_info.imptype;
-		calcstatistics(b, im);
+		if (calcstatistics(b, im))
+			return;
+
 		b->results[im].throughput_edges_per_sec = b->matrix_info.nnz / b->results[im].stats.mean_time_s;
+	}
+
+	if (b->benchmark_info.imptype != IMPL_SEQUENTIAL) {
+		if (getcudadeviceinfo(&b->gpu_info))
+			return;
+	} else {
+		b->gpu_info.available = 0;
 	}
 
 	getcpuinfo(b);
@@ -365,6 +376,8 @@ benchmarkprint(Benchmark *b)
 
 	printf("{\n");
 	print_sys_info(&(b->sys_info), 2);
+	printf(",\n");
+	print_gpu_info(&(b->gpu_info), 2);
 	printf(",\n");
 	print_matrix_info(&(b->matrix_info), 2);
 	printf(",\n");

@@ -52,6 +52,14 @@ int connected_components_cuda_block_per_row(const Matrix *mtx);
 
 int connected_components_cuda_afforest(const Matrix *mtx);
 
+/**
+ * @brief Captures in struct cuda device info.
+ *
+ * @param[out] info  CudaDeviceInfo struct to be populated.
+ *
+ * @return     0 on success, non-zero on failure.
+ */
+int getcudadeviceinfo(CudaDeviceInfo *info);
 
 /**
  * @brief Dispatcher to execute correct algorithm based on implementation type.

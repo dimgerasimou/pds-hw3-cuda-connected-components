@@ -66,9 +66,24 @@ typedef struct {
  */
 typedef struct {
 	char cpu_info[128]; /**< CPU model and specifications */
-	double ram_mb;      /**< Total RAM in megabytes */
-	double swap_mb;     /**< Total swap space in megabytes */
+	double ram_gb;      /**< Total RAM in gigabytes */
+	double swap_gb;     /**< Total swap space in gigabytes */
 } SystemInfo;
+
+/**
+ * @struct CudaDeviceInfo
+ * @brief Cuda device system information captured during benchmark execution.
+ *
+ * Contains some minimal information about the hardware where the
+ * benchmark was executed.
+ */
+typedef struct {
+	int available;   /* 1 if CUDA device available, else 0 */
+	char name[64];  /* device 0 name */
+	int cc_major;   /* compute capability major */
+	int cc_minor;   /* compute capability minor */
+	double vram_gb; /* total VRAM in gigabytes */
+} CudaDeviceInfo;
 
 /**
  * @struct MatrixInfo
@@ -81,7 +96,7 @@ typedef struct {
 	char path[PATH_MAX]; /**< File path to the matrix */
 	unsigned int rows;   /**< Number of rows in the matrix */
 	unsigned int cols;   /**< Number of columns in the matrix */
-	unsigned int nnz;    /**< Number of non-zero elements (edges in graph) */
+	unsigned int nnz;    /**< Number of non-zero elements */
 	double load_time_s;  /**< Time it took to load the matrix in memory */
 } MatrixInfo;
 
@@ -102,6 +117,7 @@ typedef struct {
  */
 typedef struct {
 	SystemInfo sys_info;          /**< System information */
+	CudaDeviceInfo gpu_info;      /**< Cuda device information */
 	MatrixInfo matrix_info;       /**< Matrix/graph information */
 	BenchmarkInfo benchmark_info; /**< Benchmark parameters */
 	Result results[IMPL_ALL];     /**< Algorithm results */
@@ -122,7 +138,7 @@ double nowsec(void);
  * @param[in] trials   Number of trials to run.
  * @param[in] wtrials  Number of warmup trials before mesuring performance.
  * @param[in] imptype  Implementation type to benchmark.
- * @param[in] mat      Pointer to the CSCBinaryMatrix used as input.
+ * @param[in] mat      Pointer to the Matrix used as input.
  *
  * @return Pointer to a newly allocated Benchmark structure, or `NULL` on failure.
  */
