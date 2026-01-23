@@ -26,12 +26,47 @@ CUDA_INC ?= $(if $(CUDA_HOME),$(CUDA_HOME)/include,)
 
 CUDA_LIB ?= $(if $(CUDA_HOME),$(CUDA_HOME)/lib64,)
 
-NVCC ?= $(CUDA_HOME)/bin/nvcc
+NVCC ?= $(if $(CUDA_HOME),$(CUDA_HOME)/bin/nvcc,nvcc)
+
+# ---------- CUDA architecture ----------
+#
+# Why this exists:
+# Newer nvcc can emit PTX that an older driver cannot JIT (e.g., nvcc 12.5
+# with a driver that supports CUDA 12.4). To avoid "PTX was compiled with an
+# unsupported toolchain" at kernel launch, we compile native SASS (sm_XX)
+# for the detected/selected GPU.
+#
+# Usage:
+#   make                  # auto-detect GPU, fallback to T4 (sm_75)
+#   make GPU_ARCH=86      # override (e.g., RTX 3060)
+#   make GPU_ARCHES="75 86"  # build fat binary for multiple GPUs
+
+# Auto-detect compute capability using nvidia-smi (first GPU), if available.
+# Output is typically "7.5"; convert to "75".
+GPU_ARCH_DETECTED := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n 1 | tr -d '.')
+
+# Default arch:
+# - If we can detect one, use it.
+# - Otherwise default to sm_75 (Colab T4 baseline).
+GPU_ARCH ?= $(if $(GPU_ARCH_DETECTED),$(GPU_ARCH_DETECTED),75)
+
+# Optional multi-arch build. If unset, we compile only for GPU_ARCH.
+GPU_ARCHES ?= $(GPU_ARCH)
+
+NVCC_GENCODE :=
+$(foreach arch,$(GPU_ARCHES),$(eval NVCC_GENCODE += -gencode arch=compute_$(arch),code=sm_$(arch)))
 
 # ---------- Flags ----------
 CPPFLAGS  ?=
 CFLAGS    ?= -Wall -Wextra -Wpedantic -O3 -fopenmp
 NVCCFLAGS ?= -O3 -Xcompiler=-fopenmp --use_fast_math
+
+# Emit native SASS for the selected arch(es) to avoid PTX JIT/toolchain issues.
+NVCCFLAGS += $(NVCC_GENCODE)
+
+# Print the effective build target(s) once (useful on Colab/cluster).
+# $(info [1;35m[CUDA] build arch(es):[0m $(GPU_ARCHES) (default GPU_ARCH=$(GPU_ARCH), detected=$(GPU_ARCH_DETECTED)))
+
 LDFLAGS   ?= -Xcompiler=-fopenmp
 LDLIBS    ?= -lm -lcudart
 
@@ -103,7 +138,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 
 # CUDA objects (generate .d next to .o; nvcc supports -MMD/-MP on modern toolkits)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cu | $(OBJ_DIR)
-	@$(PRINTF) "$(COLOR_MAGENTA)Compiling CUDA:$(COLOR_RESET) %s\n" "$<"
+	@$(PRINTF) "$(COLOR_MAGENTA)Compiling CUDA [Arch:$(GPU_ARCHES)]:$(COLOR_RESET) %s\n" "$<"
 	@$(NVCC) $(CPPFLAGS) $(NVCCFLAGS) $(DEPFLAGS) -c $< -o $@
 
 clean:
@@ -123,7 +158,10 @@ help:
 	@$(PRINTF) "  $(COLOR_CYAN)help$(COLOR_RESET)      Show this message\n\n"
 	@$(PRINTF) "$(COLOR_BOLD)Overrides:$(COLOR_RESET)\n"
 	@$(PRINTF) "  make CUDA_HOME=/opt/cuda\n"
+	@$(PRINTF) "  make GPU_ARCH=86\n"
+	@$(PRINTF) "  make GPU_ARCHES=\"75 86 89\"\n"
 	@$(PRINTF) "  make CC=clang\n"
 	@$(PRINTF) "  make NO_COLOR=1\n"
 	@$(PRINTF) "$(COLOR_BOLD)Usage:$(COLOR_RESET)\n"
-	@$(PRINTF) "  ./$(TARGET) [-n trials] [-w warmup] [-i impl] data.mtx\n\n"
+	@$(PRINTF) "  ./$(TARGET) [-n trials] [-w warmup trials] [-i implementation type] data.mtx\n\n"
+
