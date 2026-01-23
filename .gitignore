@@ -6,3 +6,6 @@ data/
 # code editor artifacts
 compile_commands.json
 .cache/
+
+# tex artifacts
+*/tex-build/
