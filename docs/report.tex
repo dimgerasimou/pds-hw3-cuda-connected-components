@@ -1,43 +1,65 @@
 % !TEX TS-program = XeLaTeX
 % !TeX program = xelatex
 
-\documentclass[11pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 \usepackage[a4paper,left=15mm,right=15mm,top=18mm,bottom=18mm]{geometry}
 
-\usepackage{minted}
-\usepackage{bookmark}
 \usepackage{booktabs}
+\usepackage{float}
 \usepackage[table]{xcolor}
 \usepackage{pgfplots}
 \usepackage{hyperref}
 \usepackage{fancyhdr}
 \usepackage{abstract}
-\usepackage{enumitem}
-\usepackage{microtype}
 \usepackage{siunitx}
+\usepackage{listings}
+\usepackage{tcolorbox}
+
+\definecolor{cbase}{RGB}{239,241,245}
+\definecolor{ctext}{RGB}{76,69,105}
+\definecolor{cflamingo}{RGB}{221,120,120}
+\definecolor{cblue}{RGB}{30,102,245}
+\definecolor{cgreen}{RGB}{64,160,43}
+\definecolor{cred}{RGB}{210,15,57}
+\definecolor{cmauve}{RGB}{136,57,239}
+
+\definecolor{cpu}{named}{cred}
+\definecolor{tpv}{named}{cflamingo}
+\definecolor{warp}{named}{cgreen}
+\definecolor{block}{named}{cblue}
+\definecolor{afforest}{named}{cmauve}
+
 \pgfplotsset{compat=1.18}
 
-\setminted{
-	linenos,
-	frame=single,
-	breaklines,
-	autogobble,
-	fontsize=\footnotesize,
-	bgcolor=gray!5,
+\tcbuselibrary{listings,skins,breakable}
+
+\lstdefinestyle{code}{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  breaklines=true,
+  numbers=left,
+  numberstyle=\small\color{ctext},
+  backgroundcolor=\color{cbase},
+  commentstyle=\color{cgreen},
+  keywordstyle=\color{cmauve}\bfseries,
+  identifierstyle=\color{ctext},
+  showstringspaces=false,
+  keepspaces=true,
+  tabsize=8,
+  columns=fullflexible,
+  literate=
+    {size_t}{{\textcolor{cblue}{size\_t}}}1
+    {uint32_t}{{\textcolor{cblue}{uint32\_t}}}1
 }
+
+\lstset{style=code}
 
 \hypersetup{
 	colorlinks=true,
 	linkcolor=black,
-	filecolor=blue,
-	urlcolor=blue,
+	filecolor=cblue,
+	urlcolor=cblue,
 }
-
-\definecolor{cpu}{RGB}{225,115,145}       % darker red
-\definecolor{tpv}{RGB}{220,180,180}       % darker flamingo
-\definecolor{warp}{RGB}{135,200,130}      % darker green
-\definecolor{block}{RGB}{105,150,220}     % darker blue
-\definecolor{afforest}{RGB}{175,135,220}  % darker mauve
 
 \renewcommand{\abstractnamefont}{\normalfont\Large\bfseries}
 \setlength{\absleftindent}{0pt}
@@ -47,7 +69,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small Parallel \& Distributed Systems}
-\fancyhead[R]{\small Connected Components Cuda}
+\fancyhead[R]{\small Connected Components -- CUDA}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
@@ -79,9 +101,9 @@ This report evaluates several CUDA-based CC implementations on a single GPU, inc
 \textbf{warp per row}, \textbf{block per row}, and an \textbf{Afforest style} variant. Experiments were conducted
 on \emph{Google Colab} using an \emph{NVIDIA Tesla T4 GPU} across a range of real-world graphs, from small sparse
 matrices to large social and network traffic graphs. Results show speedups of up to \(\text{\textasciitilde}\,
-5\times\) over a sequential CPU baseline and peak throughputs approaching 2 billion edges per second on social
+5\times\) over a sequential CPU baseline and peak throughputs \textbf{exceeding 1.9 billion edges per second} on social
 network graphs. However, performance is highly workload-dependent: for very small graphs, GPU overhead dominates,
-while for extremely sparse large graphs (MAWI), naïve GPU mappings perform poorly. These results highlight both
+while for extremely low-degree large graphs (MAWI), naïve GPU mappings perform poorly. These results highlight both
 the potential and the limitations of GPU acceleration for connected components.
 \end{abstract}
 
@@ -105,24 +127,31 @@ only to achieve high performance, but also to analyze when GPU acceleration is e
 Graphs are represented using a binary \emph{Compressed Sparse Column (CSC)} format, storing only adjacency
 information. Numerical values are discarded, as connected components depend solely on graph topology.
 
-\begin{minted}{c}
+\begin{lstlisting}[language=C]
 typedef struct {
-        size_t nrows;     /**< Number of rows in the matrix */
-        size_t ncols;     /**< Number of columns in the matrix */
-        size_t nnz;       /**< Number of non-zero (1) entries */
-        uint32_t *rowi;   /**< Row indices of non-zero elements (length nnz) */
-        uint32_t *colptr; /**< Column pointers (length ncols + 1) */
+	size_t   nrows;   /* Number of rows in the matrix */
+	size_t   ncols;   /* Number of columns in the matrix */
+	size_t   nnz;     /* Number of non-zero (1) entries */
+	uint32_t *rowi;   /* Row indices of non-zero elements (length nnz) */
+	uint32_t *colptr; /* Column pointers (length ncols + 1) */
 } Matrix;
-\end{minted}
+\end{lstlisting}
 
 \emph{Compressed Sparse Column} is well-suited for iterative \emph{Connected Components} algorithms because it
-allows efficient traversal of each vertex’s adjacency list. The same representation is used for both CPU and
+allows efficient traversal of each vertex's adjacency list. The same representation is used for both CPU and
 GPU implementations to ensure fair comparison.
 
 \section{CUDA Connected Components Implementations}
-All GPU implementations follow an iterative label-propagation-style approach. Initially, each vertex is assigned
-a unique label equal to its global ID. During each iteration, vertices inspect their neighbors and update their
-label to the minimum label observed. Iterations continue until convergence, detected when no label changes.
+All GPU implementations follow an iterative atomic union-find approach. Initially, each vertex is assigned
+a unique label equal to its global ID. During each iteration, vertices inspect their neighbors and perform
+atomic union operations to merge component labels. Iterations continue until convergence, detected when no
+label changes.
+
+The implementation uses \textbf{union-by-index} rather than the theoretically optimal union-by-rank heuristic.
+This design choice trades asymptotic optimality for simpler concurrent execution: union-by-index always links
+the higher-index root to the lower-index root, ensuring a canonical form without requiring atomic rank updates.
+This simplification reduces synchronization overhead and is well-suited for GPU parallelism where minimizing
+atomic operations is critical.
 
 The following CUDA mappings were implemented and evaluated:
 
@@ -138,7 +167,7 @@ is distributed across the 32 threads of the warp, reducing per-thread work and i
 This approach is more robust to degree variability and reduces divergence compared to thread-per-vertex.
 
 \subsection{Block per Row}
-A full thread block is assigned to each vertex, allowing even larger adjacency lists to be plocessed in
+A full thread block is assigned to each vertex, allowing even larger adjacency lists to be processed in
 parallel. This mapping increases parallelism for high-degree vertices but introduces higher overhead and
 requires careful synchronization within the block. It is most effective for very large graphs with significant
 per-vertex work.
@@ -151,9 +180,9 @@ strongly on graph structure and connectivity patterns.
 \section{Experimental Setup}
 Experiments were conducted on \textbf{Google Colab}, using the following configuration:
 \begin{itemize}
-	\item\textbf{CPU}: Intex Xeon (no model number provided)
+	\item\textbf{CPU}: Intel Xeon (no model number provided)
 	\item\textbf{RAM}: \textasciitilde\SI{12.7}{\giga\byte}
-	\item\textbf{GPU}: NVIDIA Tesla T4 (Compute Capability: 7.5, \textasciitilde\SI{14.7}{\giga\byte} VRAM
+	\item\textbf{GPU}: NVIDIA Tesla T4 (Compute Capability: 7.5, \textasciitilde\SI{14.7}{\giga\byte} VRAM)
 \end{itemize}
 
 Each dataset was executed for multiple trials, with a number of warm-up iterations discarded to avoid
@@ -162,65 +191,71 @@ is reported as processed edges per second.
 
 \begin{table*}[h]
 	\centering
-	\rowcolors{2}{gray!10}{white}
-	\begin{tabular}{llll}
+	\rowcolors{2}{gray!30}{white}
+	\begin{tabular}{llllr}
 		\toprule
-		\textbf{Dataset} & \textbf{Vertices} & \textbf{Edges} & \textbf{Characteristics}\\
+		\textbf{Dataset} & \textbf{Vertices} & \textbf{Edges} & \textbf{Avg Degree} & \textbf{Characteristics}\\
 		\midrule
-		dictionary28       & \num{52.7}k & \num{178}k  & Small, sparse graph\\
-		hollywood-2009     & \num{1.14}M & \num{113}M  & Medium social graph\\
-		com-LiveJournal    & \num{4.00}M & \num{69.4}M & Social Network\\
-		com-Orkut          & \num{3.07}M & \num{234}M  & Dense social graph\\
-		mawi\_201512020330 & \num{226}M  & \num{480}M  & Extremely sparse, irregular\\
+		dictionary28       & \num{52.7}k & \num{178}k  & 3.4  & Small, sparse graph\\
+		hollywood-2009     & \num{1.14}M & \num{113}M  & 99.0 & Medium social graph\\
+		com-LiveJournal    & \num{4.00}M & \num{69.4}M & 17.3 & Social Network\\
+		com-Orkut          & \num{3.07}M & \num{234}M  & 76.3 & Dense social graph\\
+		mawi\_201512020330 & \num{226}M  & \num{480}M  & 2.1  & Extremely low-degree, irregular\\
 		\bottomrule
 	\end{tabular}
-	\caption{Datasets used in evaluation.}
+	\caption{Datasets used in evaluation. Average degree = Edges / Vertices.}
 	\label{tab:datasets}
 \end{table*}
 
 \section{Results}
 
-\begin{table}[h]
+\begin{table}[ht]
 	\centering
+	\rowcolors{2}{gray!30}{white}
 	\begin{tabular}{lrrr}
 		\toprule
 		\textbf{Dataset} & \textbf{Best GPU} & \textbf{Throughput (GE/s)} & \textbf{Speedup} \\
 		\midrule
-		dictionary28     & Warp-per-Row   & 0.23  & 1.33× \\
-		hollywood-2009   & Warp-per-Row   & 1.95  & 4.00× \\
-		com-LiveJournal  & Thread-per-Vertex & 1.65 & 4.93× \\
-		com-Orkut        & Warp-per-Row   & 1.79  & 4.73× \\
-		mawi             & Block-per-Row  & 0.35  & 1.65× \\
+		dictionary28       & Warp-per-Row      & 0.23 & 1.33\( \times \) \\
+		hollywood-2009     & Warp-per-Row      & 1.95 & 4.00\( \times \) \\
+		com-LiveJournal    & Thread-per-Vertex & 1.65 & 4.93\( \times \) \\
+		com-Orkut          & Warp-per-Row      & 1.79 & 4.73\( \times \) \\
+		mawi\_201512020330 & Block-per-Row     & 0.35 & 1.65\( \times \) \\
 		\bottomrule
 	\end{tabular}
-	\caption{Best GPU implementation per dataset}
+	\caption{Best GPU implementation per dataset.}
 \end{table}
 
 \subsection{Small Graph: \emph{dictionary28}}
 For the small \emph{dictionary28} graph, GPU acceleration provides only marginal benefits. All CUDA variants
-achieve similar runtimes to the CPU sequential baseline, with speedups close to \( 1 \times\). Kernel launch
-overhead and memory transfer costs dominate execution, limiting the effectiveness of GPU parallelism for such
-small workloads.
+achieve similar runtimes to the CPU sequential baseline, with speedups close to \( 1 \times\) (Figure~\ref{fig:speedup}).
+Kernel launch overhead and memory transfer costs dominate execution, limiting the effectiveness of GPU parallelism
+for such small workloads. Despite the low absolute performance gains, \textbf{warp per row} delivers the best
+throughput at 228 MEdges/s (Figure~\ref{fig:throughput}).
 
 \subsection{Medium Graphs: \emph{hollywood-2009}}
 On \emph{hollywood-2009}, GPU implementations significantly outperform the CPU baseline. \textbf{Warp per row}
-achieves the best performance, reaching nearly 1 billion edges per second and providing a speedup of
-approximately \( 4 \times \). \textbf{Thread per vertex} performs slightly worse due to load imbalance,
-while \textbf{block per row} introduces additional overhead without clear benefits for this graph size.
+achieves the best performance, reaching \textbf{1.95 billion edges per second} and providing a speedup of
+approximately \( 4 \times \) (Figure~\ref{fig:speedup}). \textbf{Thread per vertex} performs slightly worse due
+to load imbalance, while \textbf{block per row} introduces additional overhead without clear benefits for this
+graph size. The high average degree (99.0) provides sufficient parallelism to amortize GPU overheads effectively.
 
 \subsection{Social Networks: \emph{LiveJournal} and \emph{Orkut}}
 Both \emph{LiveJournal} and \emph{Orkut} benefit strongly from GPU acceleration. All CUDA variants outperform
 the CPU baseline by a wide margin, with \textbf{warp per row} and \textbf{thread per vertex} achieving the
-highest throughput. On \emph{Orkut}, throughput exceeds 1.7 billion edges per second, corresponding to
-speedups of around \( 5 - 6 \times \) over CPU execution. These graphs provide enough parallel work per
-iteration to effectively amortize GPU overhead.
+highest throughput. On \emph{Orkut}, throughput exceeds \textbf{1.7 billion edges per second}, corresponding to
+speedups of around \( 4.7 \times \) over CPU execution (Figure~\ref{fig:speedup}). These graphs provide enough
+parallel work per iteration to effectively amortize GPU overhead. Figure~\ref{fig:size_vs_speedup} shows that
+these moderately-sized social networks achieve the best speedups relative to graph size.
 
-\subsection{Large Sparse Graph: \emph{MAWI}}
-The \emph{MAWI} dataset exhibits dramatically different behavior. The \textbf{thread per vertex} mapping
-performs extremely poorly, with runtimes an order of magnitude worse than the CPU baseline. \textbf{Warp per row}
-improves performance substantially, but only \textbf{block per row} achieves a modest speedup over CPU execution.
-Even in this best case, GPU gains are limited, reflecting the low average degree and irregular access
-patterns of \emph{MAWI}.
+\subsection{Large Low-Degree Graph: \emph{MAWI}}
+The \emph{MAWI} dataset exhibits dramatically different behavior due to its extremely low average degree (2.1).
+The \textbf{thread per vertex} mapping performs catastrophically poorly, with runtimes an order of magnitude
+worse than the CPU baseline, achieving only 0.04\( \times \) speedup (Figure~\ref{fig:speedup}). \textbf{Warp per row}
+improves performance substantially, but only \textbf{block per row} achieves a modest speedup (1.65×) over CPU
+execution. Even in this best case, GPU gains are limited, reflecting the insufficient parallelism per vertex
+and irregular access patterns. Figure~\ref{fig:throughput} clearly shows MAWI as an outlier, with Thread-per-Vertex
+throughput dropping below 10 MEdges/s on the log scale.
 
 \begin{figure}[H]
 \centering
@@ -249,7 +284,7 @@ patterns of \emph{MAWI}.
 \addplot+[fill=block,draw=black!30]    coordinates {(dictionary28,1.31) (hollywood-2009,3.79) (com-LiveJournal,3.53) (com-Orkut,4.44) (mawi,1.65)};
 \addplot+[fill=afforest,draw=black!30] coordinates {(dictionary28,1.03) (hollywood-2009,3.73) (com-LiveJournal,3.10) (com-Orkut,4.26) (mawi,1.32)};
 
-\legend{Thread-per-Vertex,Warp-per-Row,Block-per-Row,Afforest}
+\legend{CPU, Thread-per-Vertex,Warp-per-Row,Block-per-Row,Afforest}
 \end{axis}
 \end{tikzpicture}
 \caption{Speedup relative to the sequential CPU baseline (higher is better).}
@@ -287,7 +322,7 @@ patterns of \emph{MAWI}.
 \legend{CPU,Thread-per-Vertex,Warp-per-Row,Block-per-Row,Afforest}
 \end{axis}
 \end{tikzpicture}
-\caption{Throughput across datasets (log scale). Social graphs approach \(\sim 2 \times 10^3)\ Medges/s; MAWI exposes poor mapping choices (notably Thread-per-Vertex).}
+\caption{Throughput across datasets (log scale). Social graphs achieve up to $\sim 2 \times 10^3$ Medges/s; MAWI exposes poor mapping choices, with Thread-per-Vertex collapsing below 10 Medges/s.}
 \label{fig:throughput}
 \end{figure}
 
@@ -330,7 +365,7 @@ patterns of \emph{MAWI}.
 \legend{Best CUDA mapping per dataset}
 \end{axis}
 \end{tikzpicture}
-\caption{Best observed speedup vs graph size. Small graphs are overhead-dominated; social graphs benefit most; extremely sparse massive graphs (MAWI) limit GPU gains.}
+\caption{Best observed speedup vs graph size. Small graphs are overhead-dominated; social graphs benefit most; extremely low-degree massive graphs (MAWI) limit GPU gains.}
 \label{fig:size_vs_speedup}
 \end{figure}
 
@@ -338,14 +373,21 @@ patterns of \emph{MAWI}.
 The results demonstrate that \textbf{GPU performance for connected components is highly workload-dependent}.
 \begin{itemize}
 	\item\textbf{Degree distribution matters}: Graphs with higher average degree and more uniform structure
-	(e.g., social networks) benefit the most from GPU parallelism.
+	(e.g., social networks with avg degree 17–99) benefit the most from GPU parallelism. The correlation between
+	average degree and speedup is evident in Table~\ref{tab:datasets} and Figure~\ref{fig:size_vs_speedup}.
+	
 	\item\textbf{Mapping choice is critical}: \textbf{Warp per row} consistently provides robust performance
 	across most datasets by balancing parallelism and overhead. \textbf{Thread per vertex} is fragile and
-	fails on extremely sparse graphs.
+	catastrophically fails on extremely low-degree graphs (MAWI: 0.04× speedup).
+	
 	\item\textbf{Overheads dominate small workloads}: For small graphs, GPU kernel launch and synchronization
-	costs outweigh any parallelism benefits.
-	\item\textbf{Sparse massive graphs remain challenging}: \emph{MAWI} highlights the limits of GPU
+	costs outweigh any parallelism benefits, as shown in Figure~\ref{fig:speedup} where dictionary28 achieves
+	minimal speedup.
+	
+	\item\textbf{Low-degree massive graphs remain challenging}: \emph{MAWI} highlights the limits of GPU
 	acceleration when computation per vertex is insufficient to hide memory latency and synchronization costs.
+	With an average degree of only 2.1, there is simply not enough parallel work per vertex to justify GPU
+	execution for naïve mappings.
 \end{itemize}
 
 These observations mirror known challenges in GPU graph analytics: maximizing useful work per thread and
@@ -353,21 +395,42 @@ minimizing divergence are essential for performance.
 
 \section{Conclusions}
 This work evaluated multiple CUDA-based connected components implementations on a single GPU. For medium and large
-social graphs, GPU acceleration achieves substantial speedups over a sequential CPU baseline, with peak throughpu
-approaching 1 billion edges per second. However, performance varies widely across datasets and kernel mappings.
-Simple GPU strategies fail on extremely sparse or small graphs, while more cooperative mappings such as
-\textbf{warp per row} and \textbf{block per row} provide better robustness.
+social graphs with moderate-to-high average degree, GPU acceleration achieves substantial speedups over a sequential
+CPU baseline, with peak throughput \textbf{exceeding 1.9 billion edges per second}. However, performance varies
+widely across datasets and kernel mappings. Simple GPU strategies fail catastrophically on extremely low-degree or
+small graphs, while more cooperative mappings such as \textbf{warp per row} and \textbf{block per row} provide
+better robustness.
 
 Overall, GPUs are a powerful platform for connected components, but achieving high performance requires careful
-consideration of graph structure and execution mapping.
+consideration of graph structure—particularly average vertex degree—and execution mapping.
 
 \section{Future Work}
 Potential directions for further improvement include:
 \begin{itemize}
-	\item Implementing graph reordering to improve locality and reduce divergence.
-	\item Exploring hybrid CPU–GPU approaches for irregular or sparse graphs.
-	\item Investigating multi-GPU scaling and overlap of computation with data transfers.
-	\item Adding fine-grained profiling to separate computation, memory, and synchronization costs.
+	\item \textbf{Convergence analysis}: Instrument the code to track and report the number of iterations required
+	for convergence across different implementations and graph structures. This would help explain performance
+	differences beyond just throughput.
+	
+	\item \textbf{Graph reordering}: Implement degree-sorted vertex reordering to improve locality and reduce
+	divergence. High-degree vertices could be processed first to accelerate component merging.
+	
+	\item \textbf{Hybrid CPU–GPU approaches}: For irregular or low-degree graphs like MAWI, explore strategies
+	that partition the graph based on degree distribution, processing low-degree vertices on CPU and high-degree
+	vertices on GPU.
+	
+	\item \textbf{Multi-GPU scaling}: Investigate graph partitioning strategies for multi-GPU execution with
+	overlap of computation and inter-GPU communication.
+	
+	\item \textbf{Memory bandwidth profiling}: Add fine-grained profiling using NVIDIA Nsight Compute to separate
+	computation time, memory transfer time, and synchronization overhead. This would identify bottlenecks more
+	precisely.
+	
+	\item \textbf{Alternative algorithms}: Compare against BFS-based connected components and Shiloach-Vishkin
+	algorithms to understand whether union-find is optimal for GPU execution.
+	
+	\item \textbf{Dynamic parallelism}: For graphs with highly variable degree distribution, explore CUDA dynamic
+	parallelism to adaptively select thread-per-vertex vs warp-per-row vs block-per-row based on runtime degree
+	analysis.
 \end{itemize}
 
 \noindent\textbf{Code Availability:} Source code and benchmark results are available at:\\
