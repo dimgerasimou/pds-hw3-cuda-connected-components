@@ -101,7 +101,7 @@ typedef struct {
  */
 typedef struct {
 	int available;   /**< 1 if CUDA device is available, else 0 */
-	char name[64];   /**< Device name (e.g., "NVIDIA GeForce RTX 3080") */
+	char name[256];   /**< Device name (e.g., "NVIDIA GeForce RTX 3080") */
 	int cc_major;    /**< Compute capability major version */
 	int cc_minor;    /**< Compute capability minor version */
 	double vram_gb;  /**< Total VRAM in gigabytes */

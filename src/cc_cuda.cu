@@ -782,7 +782,8 @@ get_cuda_device_info(CudaDeviceInfo *info)
 	CUDA_CHECK_GOTO(cudaGetDeviceProperties(&prop, 0), infoerr);
 
 	info->available = 1;
-	snprintf(info->name, sizeof(info->name), "%s", prop.name);
+	strncpy(info->name, prop.name, sizeof(info->name) - 1);
+	info->name[sizeof(info->name) - 1] = '\0';
 	info->cc_major = prop.major;
 	info->cc_minor = prop.minor;
 	info->vram_gb = prop.totalGlobalMem / 1024.0 / 1024.0 / 1024.0;
