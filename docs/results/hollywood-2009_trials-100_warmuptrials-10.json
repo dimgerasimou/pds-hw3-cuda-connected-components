@@ -1,0 +1,112 @@
+{
+  "sys_info": {
+    "cpu_info": "Intel(R) Xeon(R) CPU @ 2.00GHz",
+    "ram_gb": 12.67,
+    "swap_gb": 0.00
+  },
+  "gpu_info": {
+    "available": true,
+    "name": "Tesla T4",
+    "cc": "7.5",
+    "vram_gb": 14.74
+  },
+  "matrix_info": {
+    "path": "data/hollywood-2009.mtx",
+    "rows": 1139905,
+    "cols": 1139905,
+    "nnz": 56375711,
+    "load_time_s": 12.829407
+  },
+  "benchmark_info": {
+    "trials": 100,
+    "wtrials": 10,
+    "imptype": 5
+  },
+  "results": [
+    {
+      "implementation_name": "CPU: Sequential",
+      "timestamp": "2026-01-23T04:57:04",
+      "connected_components": 44508,
+      "stable_results": true,
+      "statistics": {
+        "mean_time_s": 0.231385,
+        "std_dev_s": 0.060238,
+        "median_time_s": 0.207698,
+        "min_time_s": 0.200426,
+        "max_time_s": 0.436815,
+        "total_time_s": 23.143175
+      },
+      "throughput_edges_per_sec": 243644441.41,
+      "cpu_peak_rss_gb": 0.225407,
+      "gpu_peak_used_gb": 0.000000
+    },
+    {
+      "implementation_name": "CUDA: Thread-per-Vertex",
+      "timestamp": "2026-01-23T04:57:29",
+      "connected_components": 44508,
+      "stable_results": true,
+      "statistics": {
+        "mean_time_s": 0.061581,
+        "std_dev_s": 0.002902,
+        "median_time_s": 0.060025,
+        "min_time_s": 0.058959,
+        "max_time_s": 0.070868,
+        "total_time_s": 6.161187
+      },
+      "throughput_edges_per_sec": 915471482.01,
+      "cpu_peak_rss_gb": 0.319981,
+      "gpu_peak_used_gb": 0.325134
+    },
+    {
+      "implementation_name": "CUDA: Warp-per-Row",
+      "timestamp": "2026-01-23T04:57:36",
+      "connected_components": 44508,
+      "stable_results": true,
+      "statistics": {
+        "mean_time_s": 0.057770,
+        "std_dev_s": 0.001897,
+        "median_time_s": 0.057398,
+        "min_time_s": 0.056357,
+        "max_time_s": 0.071883,
+        "total_time_s": 5.779824
+      },
+      "throughput_edges_per_sec": 975873046.38,
+      "cpu_peak_rss_gb": 0.319984,
+      "gpu_peak_used_gb": 0.325134
+    },
+    {
+      "implementation_name": "CUDA: Block-per-Row",
+      "timestamp": "2026-01-23T04:57:43",
+      "connected_components": 44508,
+      "stable_results": true,
+      "statistics": {
+        "mean_time_s": 0.061063,
+        "std_dev_s": 0.003592,
+        "median_time_s": 0.059641,
+        "min_time_s": 0.058388,
+        "max_time_s": 0.083590,
+        "total_time_s": 6.109193
+      },
+      "throughput_edges_per_sec": 923243841.09,
+      "cpu_peak_rss_gb": 0.319988,
+      "gpu_peak_used_gb": 0.325134
+    },
+    {
+      "implementation_name": "CUDA: Afforest",
+      "timestamp": "2026-01-23T04:57:49",
+      "connected_components": 44508,
+      "stable_results": true,
+      "statistics": {
+        "mean_time_s": 0.062007,
+        "std_dev_s": 0.001057,
+        "median_time_s": 0.061812,
+        "min_time_s": 0.060802,
+        "max_time_s": 0.067073,
+        "total_time_s": 6.203601
+      },
+      "throughput_edges_per_sec": 909181799.44,
+      "cpu_peak_rss_gb": 0.319992,
+      "gpu_peak_used_gb": 0.325134
+    }
+  ]
+}
