@@ -14,6 +14,7 @@
 #include <sys/resource.h>
 #include <sys/sysinfo.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "benchmark.h"
 #include "cc.h"
@@ -161,6 +162,34 @@ gettimestamp(Benchmark *b, const unsigned int im)
 	strftime(b->results[im].timestamp, sizeof(b->results[im].timestamp), "%Y-%m-%dT%H:%M:%S", &tm);
 }
 
+/**
+ * @brief Read current resident set size (RSS) in kilobytes.
+ *
+ * Linux-specific: parses /proc/self/statm.
+ */
+static unsigned long long
+read_rss_kb(void)
+{
+	FILE *f = fopen("/proc/self/statm", "r");
+	if (!f)
+		return 0ULL;
+
+	unsigned long long size_pages = 0ULL;
+	unsigned long long rss_pages = 0ULL;
+	if (fscanf(f, "%llu %llu", &size_pages, &rss_pages) != 2) {
+		fclose(f);
+		return 0ULL;
+	}
+	fclose(f);
+
+	long pagesize = sysconf(_SC_PAGESIZE);
+	if (pagesize <= 0)
+		pagesize = 4096;
+
+	unsigned long long rss_bytes = rss_pages * (unsigned long long)pagesize;
+	return rss_bytes / 1024ULL;
+}
+
 /* ------------------------------------------------------------------------- */
 /*                            Public API Implementation                      */
 /* ------------------------------------------------------------------------- */
@@ -213,6 +242,7 @@ benchmarkinit(const char *path, const unsigned int trials, const unsigned int wt
 	b->benchmark_info.trials  = trials;
 	b->benchmark_info.wtrials = wtrials;
 	b->benchmark_info.imptype = imptype;
+	b->gpu_info.available = 0;
 
 	for (unsigned int i = 0; i < IMPL_ALL; i++) {
 		b->results[i].times = NULL;
@@ -256,6 +286,7 @@ static int
 benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 {
 	double time_tot_start, time_tot_end;
+	unsigned long long rss_peak_kb;
 
 	/* allocate times array */
 	b->results[im].times = malloc(b->benchmark_info.trials * sizeof(double));
@@ -271,6 +302,9 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 	strncpy(b->results[im].name, implementation_names[im], sizeof(b->results[im].name));
 	b->results[im].name[sizeof(b->results[im].name) - 1] = '\0';
 
+	/* initialize per-implementation memory peaks */
+	rss_peak_kb = read_rss_kb();
+
 	/* warmup runs */
 	for (unsigned int i = 0; i < b->benchmark_info.wtrials; i++) {
 		int result;
@@ -280,6 +314,17 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 			uerrf("implementation \"%s\" encountered an error", b->results[im].name);
 			return 1;
 		}
+
+		/* Track per-implementation CPU RSS peak (warmups included). */
+		{
+			unsigned long long rss_now = read_rss_kb();
+			if (rss_now > rss_peak_kb)
+				rss_peak_kb = rss_now;
+		}
+
+		/* Track per-implementation GPU peak memory (warmups included). */
+		if (im != IMPL_SEQUENTIAL)
+			set_cuda_memory_metrics(&b->results[im]);
 	}
 
 	/* normal runs */
@@ -304,9 +349,21 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 
 		if ((unsigned int) result != b->results[im].connected_components)
 			b->results[im].stable_results = 0;
+
+		/* Track per-implementation CPU RSS peak (warmups included). */
+		{
+			unsigned long long rss_now = read_rss_kb();
+			if (rss_now > rss_peak_kb)
+				rss_peak_kb = rss_now;
+		}
+
+		/* Track per-implementation GPU peak memory (warmups included). */
+		if (im != IMPL_SEQUENTIAL)
+			set_cuda_memory_metrics(&b->results[im]);
 	}
 	time_tot_end = nowsec();
 
+	b->results[im].cpu_peak_rss_gb = (double)rss_peak_kb / 1024.0 / 1024.0;
 	b->results[im].stats.total_time_s = time_tot_end - time_tot_start;
 	return 0;
 }
@@ -367,8 +424,6 @@ benchmarkprint(Benchmark *b)
 	if (b->benchmark_info.imptype != IMPL_SEQUENTIAL) {
 		if (getcudadeviceinfo(&b->gpu_info))
 			return;
-	} else {
-		b->gpu_info.available = 0;
 	}
 
 	getcpuinfo(b);

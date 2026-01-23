@@ -62,6 +62,14 @@ int connected_components_cuda_afforest(const Matrix *mtx);
 int getcudadeviceinfo(CudaDeviceInfo *info);
 
 /**
+ * @brief Captures peak memory usage during trial.
+ *
+ * @param[out] result  Result struct to enter value in.
+ *
+ */
+int set_cuda_memory_metrics(Result *result);
+
+/**
  * @brief Dispatcher to execute correct algorithm based on implementation type.
  *
  * @param[in] mtx  Sparse binary matrix in CSC format.

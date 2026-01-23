@@ -36,6 +36,8 @@
 #include "error.h"
 #include "matrix.h"
 
+static double g_last_peak_used_gb;
+
 /* ------------------------------------------------------------------------- */
 /*                               CUDA Helpers                                */
 /* ------------------------------------------------------------------------- */
@@ -70,6 +72,17 @@ read_env_u32(const char *name, uint32_t defval)
 	if (errno || end == s)
 		return defval;
 	return (uint32_t)v;
+}
+
+static inline void
+update_min_free_ull(unsigned long long *min_free)
+{
+	size_t free_b = 0, total_b = 0;
+	if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess)
+		return;
+	unsigned long long f = (unsigned long long)free_b;
+	if (*min_free == 0ULL || f < *min_free)
+		*min_free = f;
 }
 
 static inline int
@@ -323,6 +336,17 @@ k_afforest_sample_warp(const uint32_t *__restrict__ colptr,
 static int
 cc_cuda_run_uf(const Matrix *mtx, int variant, int do_afforest)
 {
+	/* Track peak GPU memory used during this run using cudaMemGetInfo(). */
+	unsigned long long total_mem = 0ULL;
+	unsigned long long min_free_mem = 0ULL;
+	{
+		size_t free_b = 0, total_b = 0;
+		if (cudaMemGetInfo(&free_b, &total_b) == cudaSuccess) {
+			total_mem = (unsigned long long)total_b;
+			min_free_mem = (unsigned long long)free_b;
+		}
+	}
+
 	/* variant: 0=TPV, 1=WPR, 2=BPR */
 	size_t n_sz, nnz_sz;
 	uint32_t n;
@@ -410,6 +434,8 @@ cc_cuda_run_uf(const Matrix *mtx, int variant, int do_afforest)
 	CUDA_CHECK_GOTO(cudaMemcpy(d_colptr, mtx->colptr, colptr_bytes, cudaMemcpyHostToDevice), cleanup);
 	CUDA_CHECK_GOTO(cudaMemcpy(d_rowi, mtx->rowi, rowi_bytes, cudaMemcpyHostToDevice), cleanup);
 
+	update_min_free_ull(&min_free_mem);
+
 	k_init_parent<<<blocks_init, threads>>>(d_parent, n);
 	err = cudaGetLastError();
 	if (err != cudaSuccess) {
@@ -454,6 +480,8 @@ cc_cuda_run_uf(const Matrix *mtx, int variant, int do_afforest)
 
 	CUDA_CHECK_GOTO(cudaDeviceSynchronize(), cleanup);
 
+	update_min_free_ull(&min_free_mem);
+
 	/* Final compression (do twice; usually helps) */
 	k_compress_parent<<<blocks_init, threads>>>(d_parent, n);
 	err = cudaGetLastError();
@@ -480,6 +508,15 @@ cc_cuda_run_uf(const Matrix *mtx, int variant, int do_afforest)
 
 	rc = (h_count > (unsigned long long)INT32_MAX) ? -1 : (int)h_count;
 
+	/* Finalize per-run GPU peak used memory (GB). */
+	update_min_free_ull(&min_free_mem);
+	if (total_mem > 0ULL && min_free_mem > 0ULL && min_free_mem <= total_mem) {
+		unsigned long long peak_used_bytes = total_mem - min_free_mem;
+		g_last_peak_used_gb = (double)peak_used_bytes / 1024.0 / 1024.0 / 1024.0;
+	} else {
+		g_last_peak_used_gb = 0.0;
+	}
+
 cleanup:
 	/* best-effort cleanup */
 	if (d_count)  cudaFree(d_count);
@@ -492,6 +529,15 @@ cleanup:
 /* ------------------------------------------------------------------------- */
 /*                                Public API                                 */
 /* ------------------------------------------------------------------------- */
+
+int
+set_cuda_memory_metrics(Result *result)
+{
+	if (!result)
+		return -1;
+	result->gpu_peak_used_gb = g_last_peak_used_gb;
+	return 0;
+}
 
 int
 getcudadeviceinfo(CudaDeviceInfo *info)

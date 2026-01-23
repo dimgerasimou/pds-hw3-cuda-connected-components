@@ -6,7 +6,12 @@
 #ifndef BENCHMARK_H
 #define BENCHMARK_H
 
-#include <limits.h>
+#ifndef PATH_MAX
+#	include <linux/limits.h>
+#endif
+#ifndef PATH_MAX
+#	define PATH_MAX 4096
+#endif
 
 #include "matrix.h"
 
@@ -55,6 +60,8 @@ typedef struct {
 	Statistics stats;                  /**< Timing statistics */
 	double throughput_edges_per_sec;   /**< Processing throughput in edges per second */
 	double *times;                     /**< Array of trial execution times in seconds. */
+	double cpu_peak_rss_gb;            /**< Peak resident set size during this implementation. */
+	double gpu_peak_used_gb;           /**< Peak GPU memory used during this implementation. */
 } Result;
 
 /**

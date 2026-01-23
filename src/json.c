@@ -108,7 +108,9 @@ print_one_result(const Result *r, const unsigned int indent_level)
 	printf("%*s\"total_time_s\": %.6f\n",   indent_level + 4, "", r->stats.total_time_s);
 	printf("%*s},\n", indent_level + 2, "");
 
-	printf("%*s\"throughput_edges_per_sec\": %.2f\n", indent_level + 2, "", r->throughput_edges_per_sec);
+	printf("%*s\"throughput_edges_per_sec\": %.2f,\n", indent_level + 2, "", r->throughput_edges_per_sec);
+	printf("%*s\"cpu_peak_rss_gb\": %.6f,\n", indent_level + 2, "", r->cpu_peak_rss_gb);
+	printf("%*s\"gpu_peak_used_gb\": %.6f\n", indent_level + 2, "", r->gpu_peak_used_gb);
 
 	printf("%*s}", indent_level, "");
 }
