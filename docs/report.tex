@@ -79,7 +79,7 @@ This report evaluates several CUDA-based CC implementations on a single GPU, inc
 \textbf{warp per row}, \textbf{block per row}, and an \textbf{Afforest style} variant. Experiments were conducted
 on \emph{Google Colab} using an \emph{NVIDIA Tesla T4 GPU} across a range of real-world graphs, from small sparse
 matrices to large social and network traffic graphs. Results show speedups of up to \(\text{\textasciitilde}\,
-5\times\) over a sequential CPU baseline and peak throughputs approaching 1 billion edges per second on social
+5\times\) over a sequential CPU baseline and peak throughputs approaching 2 billion edges per second on social
 network graphs. However, performance is highly workload-dependent: for very small graphs, GPU overhead dominates,
 while for extremely sparse large graphs (MAWI), naïve GPU mappings perform poorly. These results highlight both
 the potential and the limitations of GPU acceleration for connected components.
@@ -179,6 +179,23 @@ is reported as processed edges per second.
 \end{table*}
 
 \section{Results}
+
+\begin{table}[h]
+	\centering
+	\begin{tabular}{lrrr}
+		\toprule
+		\textbf{Dataset} & \textbf{Best GPU} & \textbf{Throughput (GE/s)} & \textbf{Speedup} \\
+		\midrule
+		dictionary28     & Warp-per-Row   & 0.23  & 1.33× \\
+		hollywood-2009   & Warp-per-Row   & 1.95  & 4.00× \\
+		com-LiveJournal  & Thread-per-Vertex & 1.65 & 4.93× \\
+		com-Orkut        & Warp-per-Row   & 1.79  & 4.73× \\
+		mawi             & Block-per-Row  & 0.35  & 1.65× \\
+		\bottomrule
+	\end{tabular}
+	\caption{Best GPU implementation per dataset}
+\end{table}
+
 \subsection{Small Graph: \emph{dictionary28}}
 For the small \emph{dictionary28} graph, GPU acceleration provides only marginal benefits. All CUDA variants
 achieve similar runtimes to the CPU sequential baseline, with speedups close to \( 1 \times\). Kernel launch
@@ -194,7 +211,7 @@ while \textbf{block per row} introduces additional overhead without clear benefi
 \subsection{Social Networks: \emph{LiveJournal} and \emph{Orkut}}
 Both \emph{LiveJournal} and \emph{Orkut} benefit strongly from GPU acceleration. All CUDA variants outperform
 the CPU baseline by a wide margin, with \textbf{warp per row} and \textbf{thread per vertex} achieving the
-highest throughput. On \emph{Orkut}, throughput exceeds 880 million edges per second, corresponding to
+highest throughput. On \emph{Orkut}, throughput exceeds 1.7 billion edges per second, corresponding to
 speedups of around \( 5 - 6 \times \) over CPU execution. These graphs provide enough parallel work per
 iteration to effectively amortize GPU overhead.
 
@@ -270,7 +287,7 @@ patterns of \emph{MAWI}.
 \legend{CPU,Thread-per-Vertex,Warp-per-Row,Block-per-Row,Afforest}
 \end{axis}
 \end{tikzpicture}
-\caption{Throughput across datasets (log scale). Social graphs approach $\sim 10^3$ Medges/s; MAWI exposes poor mapping choices (notably Thread-per-Vertex).}
+\caption{Throughput across datasets (log scale). Social graphs approach \(\sim 2 \times 10^3)\ Medges/s; MAWI exposes poor mapping choices (notably Thread-per-Vertex).}
 \label{fig:throughput}
 \end{figure}
 
