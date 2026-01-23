@@ -142,10 +142,11 @@ allows efficient traversal of each vertex's adjacency list. The same representat
 GPU implementations to ensure fair comparison.
 
 \section{CUDA Connected Components Implementations}
-All GPU implementations follow an iterative atomic union-find approach. Initially, each vertex is assigned
-a unique label equal to its global ID. During each iteration, vertices inspect their neighbors and perform
-atomic union operations to merge component labels. Iterations continue until convergence, detected when no
-label changes.
+All GPU implementations follow an atomic \textbf{union-find (disjoint-set)} approach. Initially, each vertex
+is its own parent (canonical representative equal to its global ID). The kernels process edges in parallel and
+perform atomic union operations to merge sets, followed by path compression passes to flatten the parent forest.
+An optional Afforest-style sampling phase performs a small number of preconditioning rounds before the main
+union-find pass.
 
 The implementation uses \textbf{union-by-index} rather than the theoretically optimal union-by-rank heuristic.
 This design choice trades asymptotic optimality for simpler concurrent execution: union-by-index always links
