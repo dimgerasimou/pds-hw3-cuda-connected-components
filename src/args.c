@@ -40,10 +40,17 @@ usage(void)
 		"Options:\n"
 		"  -n <trials>        Number of benchmark trials (default: 5)\n"
 		"  -w <wtrials>       Number of warmup trials    (default: 1)\n"
-		"  -i <imptype>       Implementation type        (default: 0)\n"
+		"  -i <imptype>       Implementation type        (default: 5)\n"
 		"  -h                 Show this help message and exit\n\n"
 		"Arguments:\n"
 		"  matrix_file Path to the input matrix file (.mtx file format)\n\n"
+		"Available Implementation Types:\n"
+		"  0  CPU: Sequential union-find\n"
+		"  1  CUDA: One thread per vertex\n"
+		"  2  CUDA: One warp per row\n"
+		"  3  CUDA: One block per row\n"
+		"  4  CUDA: Afforest algorithm\n"
+		"  5  Run all implementations\n\n"
 		"Example:\n"
 		"  %s -n 10 -w 2 -i 1 ./data/graph.mtx\n",
 		program_name, program_name
@@ -123,8 +130,15 @@ bad_opt(int opt, int is_missing_arg)
  * Supported options:
  *   -n <trials>   Number of benchmark trials (must be > 0)
  *   -w <wtrials>  Number of warmup trials (>= 0)
- *   -i <imptype>  Implementation type (0 to IMPL_ALL)
+ *   -i <imptype>  Implementation type (5 (IMPL_ALL))
  *   -h            Show usage and exit
+ * Implementation type values:
+ *   0  CPU: Sequential union-find
+ *   1  CUDA: One thread per vertex
+ *   2  CUDA: One warp per row
+ *   3  CUDA: One block per row
+ *   4  CUDA: Afforest algorithm
+ *   5  Run all implementations
  *
  * Required argument:
  *   <matrix_file> Path to the input matrix file (MatrixMarket .mtx format)

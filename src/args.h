@@ -21,8 +21,15 @@
  * Supported options:
  *   -n <trials>   Number of benchmark trials (must be > 0)
  *   -w <wtrials>  Number of warmup trials (>= 0)
- *   -i <imptype>  Implementation type (0 to IMPL_ALL)
+ *   -i <imptype>  Implementation type (5 (IMPL_ALL))
  *   -h            Show usage and exit
+ * Implementation type values:
+ *   0  CPU: Sequential union-find
+ *   1  CUDA: One thread per vertex
+ *   2  CUDA: One warp per row
+ *   3  CUDA: One block per row
+ *   4  CUDA: Afforest algorithm
+ *   5  Run all implementations
  *
  * Required argument:
  *   <matrix_file> Path to the input matrix file (MatrixMarket .mtx format)
