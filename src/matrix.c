@@ -16,12 +16,13 @@
 
 #define _POSIX_C_SOURCE 200809L
 
+#include <errno.h> 
+#include <limits.h>
 #include <omp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>   /* <-- needed for errno/strtoull/strtod */
 
 #include "matrix.h"
 #include "error.h"
@@ -73,15 +74,24 @@ parse_coord_line(const char *line, size_t nrows, size_t ncols,
 	errno = 0;
 	unsigned long long i = strtoull(line, &end, 10);
 	if (errno || end == line) return -1;
+	if (i > ULLONG_MAX) return -1;  /* Overflow check */
 	line = end;
 
 	errno = 0;
 	unsigned long long j = strtoull(line, &end, 10);
 	if (errno || end == line) return -1;
+	if (j > ULLONG_MAX) return -1;  /* Overflow check */
 	line = end;
 
-	if (i == 0 || j == 0 || i > nrows || j > ncols)
+	if (i == 0 || j == 0) {
+		DERRF("matrix coordinate entry has zero index (i=%llu, j=%llu)", i, j);
 		return -1;
+	}
+	
+	if (i > nrows || j > ncols) {
+		DERRF("matrix coordinate entry out of bounds (i=%llu, j=%llu, nrows=%zu, ncols=%zu)", i, j, nrows, ncols);
+		return -1;
+	}
 
 	/* MatrixMarket is 1-based */
 	*oi = (uint32_t)(i - 1);
@@ -283,7 +293,7 @@ matrixload(const char *path)
 	size_t run = 0;
 	for (size_t c = 0; c < ncols; c++) {
 		run += colcnt[c];
-		if (run > UINT32_MAX) {
+		if (run > (size_t)UINT32_MAX) {
 			uerrf("nnz exceeds uint32_t");
 			free(colptr);
 			goto fail;
@@ -494,4 +504,3 @@ matrixfree(Matrix *matrix)
 
 	free(matrix);
 }
-

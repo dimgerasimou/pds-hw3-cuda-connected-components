@@ -21,6 +21,9 @@
 #include "error.h"
 #include "json.h"
 
+/* JSON output indentation level */
+#define JSON_INDENT 2
+
 const char *implementation_names[] = {
 	"CPU: Sequential",
 	"CUDA: Thread-per-Vertex",
@@ -78,13 +81,9 @@ calcstatistics(Benchmark *b, const unsigned int im)
 	}
 
 	trials = b->benchmark_info.trials;
-	times = malloc(trials * sizeof(double));
-	if (!times) {
-		DERRNOF("malloc() failed");
-		return 1;
-	}
-
-	memcpy(times, b->results[im].times, trials * sizeof(double));
+	
+	/* Sort in-place since we don't need original order after benchmarking */
+	times = b->results[im].times;
 	qsort(times, trials, sizeof(double), cmp_double);
 
 	b->results[im].stats.min_time_s = times[0];
@@ -104,9 +103,7 @@ calcstatistics(Benchmark *b, const unsigned int im)
 		? sqrt((sum_sq - trials * time_avg * time_avg) / (trials - 1))
 		: 0.0;
 
-	free(times);
 	return 0;
-
 }
 
 /**
@@ -115,10 +112,14 @@ calcstatistics(Benchmark *b, const unsigned int im)
 static void
 getmeminfo(Benchmark *b)
 {
+#ifdef __linux__
 	struct sysinfo info;
 	if (sysinfo(&info) == 0) {
 		b->sys_info.ram_gb  = info.totalram  / 1024.0 / 1024.0 / 1024.0 * info.mem_unit;
 		b->sys_info.swap_gb = info.totalswap / 1024.0 / 1024.0 / 1024.0 * info.mem_unit;
+#else
+	{
+#endif
 	} else {
 		b->sys_info.ram_gb = b->sys_info.swap_gb = 0.0;
 	}
@@ -130,6 +131,7 @@ getmeminfo(Benchmark *b)
 static void
 getcpuinfo(Benchmark *b)
 {
+#ifdef __linux__
 	FILE *f = fopen("/proc/cpuinfo", "r");
 	if (!f) {
 		snprintf(b->sys_info.cpu_info, sizeof(b->sys_info.cpu_info), "unknown");
@@ -148,6 +150,9 @@ getcpuinfo(Benchmark *b)
 		}
 	}
 	fclose(f);
+#else
+	snprintf(b->sys_info.cpu_info, sizeof(b->sys_info.cpu_info), "unknown");
+#endif
 }
 
 /**
@@ -167,6 +172,7 @@ gettimestamp(Benchmark *b, const unsigned int im)
  *
  * Linux-specific: parses /proc/self/statm.
  */
+#ifdef __linux__
 static unsigned long long
 read_rss_kb(void)
 {
@@ -189,6 +195,13 @@ read_rss_kb(void)
 	unsigned long long rss_bytes = rss_pages * (unsigned long long)pagesize;
 	return rss_bytes / 1024ULL;
 }
+#else
+static unsigned long long
+read_rss_kb(void)
+{
+	return 0ULL;
+}
+#endif
 
 /* ------------------------------------------------------------------------- */
 /*                            Public API Implementation                      */
@@ -324,7 +337,8 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 
 		/* Track per-implementation GPU peak memory (warmups included). */
 		if (im != IMPL_SEQUENTIAL)
-			set_cuda_memory_metrics(&b->results[im]);
+			if (set_cuda_memory_metrics(&b->results[im]))
+				DERRF("failed to set CUDA memory metrics");
 	}
 
 	/* normal runs */
@@ -359,7 +373,8 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 
 		/* Track per-implementation GPU peak memory (warmups included). */
 		if (im != IMPL_SEQUENTIAL)
-			set_cuda_memory_metrics(&b->results[im]);
+			if (set_cuda_memory_metrics(&b->results[im]))
+				DERRF("failed to set CUDA memory metrics");
 	}
 	time_tot_end = nowsec();
 
@@ -430,15 +445,15 @@ benchmarkprint(Benchmark *b)
 	getmeminfo(b);
 
 	printf("{\n");
-	print_sys_info(&(b->sys_info), 2);
+	print_sys_info(&(b->sys_info), JSON_INDENT);
 	printf(",\n");
-	print_gpu_info(&(b->gpu_info), 2);
+	print_gpu_info(&(b->gpu_info), JSON_INDENT);
 	printf(",\n");
-	print_matrix_info(&(b->matrix_info), 2);
+	print_matrix_info(&(b->matrix_info), JSON_INDENT);
 	printf(",\n");
-	print_benchmark_info(&(b->benchmark_info), 2);
+	print_benchmark_info(&(b->benchmark_info), JSON_INDENT);
 	printf(",\n");
-	print_results(b->results, 2, b->benchmark_info.imptype);
+	print_results(b->results, JSON_INDENT, b->benchmark_info.imptype);
 	printf("\n");
 	printf("}\n");
 }

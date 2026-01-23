@@ -8,14 +8,22 @@ OBJ_DIR ?= obj
 BIN_DIR ?= bin
 
 # ---------- CUDA location ----------
-# Prefer CUDA_HOME if the user set it, else try common defaults.
-CUDA_HOME ?= $(firstword \
-  $(wildcard /opt/cuda) \
-  $(wildcard /usr/local/cuda) \
-)
+# Try to auto-detect CUDA from nvcc in PATH first, then fall back to common locations
+ifndef CUDA_HOME
+  NVCC_PATH := $(shell which nvcc 2>/dev/null)
+  ifneq ($(NVCC_PATH),)
+    CUDA_HOME := $(shell dirname $(shell dirname $(NVCC_PATH)))
+  else
+    CUDA_HOME := $(firstword \
+      $(wildcard /opt/cuda) \
+      $(wildcard /usr/local/cuda) \
+    )
+  endif
+endif
 
 # If neither exists, CUDA_HOME stays empty; nvcc can still work if it knows its install.
 CUDA_INC ?= $(if $(CUDA_HOME),$(CUDA_HOME)/include,)
+
 CUDA_LIB ?= $(if $(CUDA_HOME),$(CUDA_HOME)/lib64,)
 
 NVCC ?= $(CUDA_HOME)/bin/nvcc
@@ -116,7 +124,6 @@ help:
 	@$(PRINTF) "$(COLOR_BOLD)Overrides:$(COLOR_RESET)\n"
 	@$(PRINTF) "  make CUDA_HOME=/opt/cuda\n"
 	@$(PRINTF) "  make CC=clang\n"
-	@$(PRINTF) "  make NO_COLOR=1\n\n"
+	@$(PRINTF) "  make NO_COLOR=1\n"
 	@$(PRINTF) "$(COLOR_BOLD)Usage:$(COLOR_RESET)\n"
 	@$(PRINTF) "  ./$(TARGET) [-n trials] [-w warmup] [-i impl] data.mtx\n\n"
-

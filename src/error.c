@@ -40,21 +40,22 @@ set_progname(const char *name)
  * @param[out] buf Output buffer.
  * @param[in]  n   Size of output buffer.
  */
+
 static void
 timestamp_now(char *buf, size_t n)
 {
 	time_t t = time(NULL);
-	struct tm tm;
+	struct tm *tm;
 
 	if (n == 0)
 		return;
 
-	if (!localtime_r(&t, &tm)) {
-		buf[0] = '\0';
-		return;
-	}
+	tm = localtime(&t);
 
-	strftime(buf, n, "%Y-%m-%d %H:%M:%S", &tm);
+	if (tm)
+		strftime(buf, n, "%Y-%m-%d %H:%M:%S", tm);
+	else
+		buf[0] = '\0';
 }
 
 /* ------------------------------------------------------------------------- */
@@ -164,4 +165,3 @@ derrf_at(const char *file, int line, const char *func,
 	vderrf_at(file, line, func, err, fmt, ap);
 	va_end(ap);
 }
-

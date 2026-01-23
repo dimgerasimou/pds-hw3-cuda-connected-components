@@ -1,6 +1,6 @@
 /**
  * @file cc_sequential.c
- * @brief Optimized union-find sequential algorithm
+ * @brief Optimized union-find sequential algorithm with better locality
  *        for computing connected components.
  */
 
@@ -100,7 +100,10 @@ connected_components_sequential(const Matrix *m)
 	
 	/* Process all edges: union connected nodes */
 	for (size_t i = 0; i < m->ncols; i++) {
-		for (uint32_t j = m->colptr[i]; j < m->colptr[i + 1]; j++) {
+		uint32_t col_start = m->colptr[i];
+		uint32_t col_end = m->colptr[i + 1];
+		
+		for (uint32_t j = col_start; j < col_end; j++) {
 			union_nodes_by_index(label, i, m->rowi[j]);
 		}
 	}
