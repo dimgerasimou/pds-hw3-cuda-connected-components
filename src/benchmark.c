@@ -439,14 +439,26 @@ benchmark_print(Benchmark *b)
 			if (calcstatistics(b, i))
 				return;
 				
-			b->results[i].throughput_edges_per_sec = b->matrix_info.nnz / b->results[i].stats.mean_time_s;
+			/* NOTE: graphs are treated as undirected; the .mtx contains one triangle,
+			 * so nnz counts each undirected edge once. For throughput we report
+			 * *undirected edges processed per second* (i.e., 2*nnz / time).
+			 */
+			double edges = 2.0 * (double)b->matrix_info.nnz;
+			b->results[i].throughput_edges_per_sec =
+			    edges / b->results[i].stats.mean_time_s;
 		}
 	} else {
 		unsigned int im = b->benchmark_info.imptype;
 		if (calcstatistics(b, im))
 			return;
 
-		b->results[im].throughput_edges_per_sec = b->matrix_info.nnz / b->results[im].stats.mean_time_s;
+		/* NOTE: graphs are treated as undirected; the .mtx contains one triangle,
+		 * so nnz counts each undirected edge once. For throughput we report
+		 * *undirected edges processed per second* (i.e., 2*nnz / time).
+		 */
+		double edges = 2.0 * (double)b->matrix_info.nnz;
+		b->results[im].throughput_edges_per_sec =
+		    edges / b->results[im].stats.mean_time_s;
 	}
 
 	if (b->benchmark_info.imptype != IMPL_SEQUENTIAL) {

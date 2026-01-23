@@ -36,7 +36,7 @@
         "max_time_s": 0.001545,
         "total_time_s": 1.052307
       },
-      "throughput_edges_per_sec": 85558086.78,
+      "throughput_edges_per_sec": 171074542.00,
       "cpu_peak_rss_gb": 0.003559,
       "gpu_peak_used_gb": 0.000000
     },
@@ -53,7 +53,7 @@
         "max_time_s": 0.001490,
         "total_time_s": 0.826351
       },
-      "throughput_edges_per_sec": 110111879.70,
+      "throughput_edges_per_sec": 220133250.00,
       "cpu_peak_rss_gb": 0.101028,
       "gpu_peak_used_gb": 0.102478
     },
@@ -70,7 +70,7 @@
         "max_time_s": 0.001063,
         "total_time_s": 0.799456
       },
-      "throughput_edges_per_sec": 113888886.73,
+      "throughput_edges_per_sec": 227651918.00,
       "cpu_peak_rss_gb": 0.101040,
       "gpu_peak_used_gb": 0.102478
     },
@@ -87,7 +87,7 @@
         "max_time_s": 0.001037,
         "total_time_s": 0.813553
       },
-      "throughput_edges_per_sec": 111841391.12,
+      "throughput_edges_per_sec": 223743718.00,
       "cpu_peak_rss_gb": 0.101051,
       "gpu_peak_used_gb": 0.102478
     },
@@ -104,7 +104,7 @@
         "max_time_s": 0.001281,
         "total_time_s": 1.023146
       },
-      "throughput_edges_per_sec": 88539646.10,
+      "throughput_edges_per_sec": 177076294.00,
       "cpu_peak_rss_gb": 0.101063,
       "gpu_peak_used_gb": 0.102478
     }
