@@ -1,15 +1,32 @@
 /**
  * @file json.c
  * @brief Minimal JSON printer for benchmark output (valid JSON).
+ *
+ * Provides functions to print benchmark structures in properly formatted
+ * and escaped JSON. Outputs to stdout for pipeline integration.
  */
 
 #include <stdio.h>
+
 #include "json.h"
 
+/* ------------------------------------------------------------------------- */
+/*                            Static Helper Functions                        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Prints a JSON-escaped string with surrounding quotes.
+ *
+ * Escapes special characters according to JSON spec: quotes, backslashes,
+ * control characters, etc. Non-ASCII bytes are passed through.
+ *
+ * @param[in] s String to print (NULL prints empty string).
+ */
 static void
 json_print_escaped(const char *s)
 {
 	const unsigned char *p = (const unsigned char *)(s ? s : "");
+	
 	putchar('"');
 	for (; *p; p++) {
 		switch (*p) {
@@ -30,6 +47,18 @@ json_print_escaped(const char *s)
 	putchar('"');
 }
 
+/* ------------------------------------------------------------------------- */
+/*                            Public API Functions                           */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Print system information as formatted JSON.
+ *
+ * Outputs CPU info, RAM, and swap space in GB.
+ *
+ * @param[in] info         Pointer to SystemInfo structure to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ */
 void
 print_sys_info(const SystemInfo *info, const unsigned int indent_level)
 {
@@ -42,23 +71,44 @@ print_sys_info(const SystemInfo *info, const unsigned int indent_level)
 	printf("%*s}", indent_level, "");
 }
 
+/**
+ * @brief Print CUDA device information as formatted JSON.
+ *
+ * Outputs availability flag and device properties (name, compute capability,
+ * VRAM) if a CUDA device is available.
+ *
+ * @param[in] gpu_info     Pointer to CudaDeviceInfo structure to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ */
 void
 print_gpu_info(const CudaDeviceInfo *gpu_info, const unsigned int indent_level)
 {
 	printf("%*s\"gpu_info\": {\n", indent_level, "");
-	printf("%*s\"available\": %s", indent_level + 2, "", gpu_info->available ? "true" : "false");
+	printf("%*s\"available\": %s", indent_level + 2, "", 
+	       gpu_info->available ? "true" : "false");
 		
 	if (gpu_info->available) {
 		printf(",\n%*s\"name\": ", indent_level + 2, "");
 		json_print_escaped(gpu_info->name);
-		printf(",\n%*s\"cc\": \"%d.%d\",\n", indent_level + 2, "", gpu_info->cc_major, gpu_info->cc_minor);
-		printf("%*s\"vram_gb\": %.2f\n", indent_level + 2, "", gpu_info->vram_gb);
+		printf(",\n%*s\"cc\": \"%d.%d\",\n", indent_level + 2, "", 
+		       gpu_info->cc_major, gpu_info->cc_minor);
+		printf("%*s\"vram_gb\": %.2f\n", indent_level + 2, "", 
+		       gpu_info->vram_gb);
 	} else {
 		printf("\n");
 	}
 	printf("%*s}", indent_level, "");
 }
 
+/**
+ * @brief Print matrix information as formatted JSON.
+ *
+ * Outputs matrix file path, dimensions (rows, cols), number of non-zero
+ * elements, and loading time.
+ *
+ * @param[in] info         Pointer to MatrixInfo structure to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ */
 void
 print_matrix_info(const MatrixInfo *info, const unsigned int indent_level)
 {
@@ -69,10 +119,19 @@ print_matrix_info(const MatrixInfo *info, const unsigned int indent_level)
 	printf("%*s\"rows\": %u,\n", indent_level + 2, "", info->rows);
 	printf("%*s\"cols\": %u,\n", indent_level + 2, "", info->cols);
 	printf("%*s\"nnz\": %u,\n", indent_level + 2, "", info->nnz);
-	printf("%*s\"load_time_s\": %.6f\n", indent_level + 2, "", info->load_time_s);
+	printf("%*s\"load_time_s\": %.6f\n", indent_level + 2, "", 
+	       info->load_time_s);
 	printf("%*s}", indent_level, "");
 }
 
+/**
+ * @brief Print benchmark parameters as formatted JSON.
+ *
+ * Outputs number of trials, warmup trials, and implementation type index.
+ *
+ * @param[in] info         Pointer to BenchmarkInfo structure to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ */
 void
 print_benchmark_info(const BenchmarkInfo *info, const unsigned int indent_level)
 {
@@ -83,6 +142,15 @@ print_benchmark_info(const BenchmarkInfo *info, const unsigned int indent_level)
 	printf("%*s}", indent_level, "");
 }
 
+/**
+ * @brief Print a single benchmark result as formatted JSON.
+ *
+ * Outputs implementation name, timestamp, component count, stability flag,
+ * timing statistics, throughput, and peak memory usage (CPU and GPU).
+ *
+ * @param[in] r            Pointer to Result structure to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ */
 static void
 print_one_result(const Result *r, const unsigned int indent_level)
 {
@@ -96,27 +164,49 @@ print_one_result(const Result *r, const unsigned int indent_level)
 	json_print_escaped(r->timestamp);
 	printf(",\n");
 
-	printf("%*s\"connected_components\": %u,\n", indent_level + 2, "", r->connected_components);
-	printf("%*s\"stable_results\": %s,\n", indent_level + 2, "", r->stable_results ? "true" : "false");
+	printf("%*s\"connected_components\": %u,\n", indent_level + 2, "", 
+	       r->connected_components);
+	printf("%*s\"stable_results\": %s,\n", indent_level + 2, "", 
+	       r->stable_results ? "true" : "false");
 
 	printf("%*s\"statistics\": {\n", indent_level + 2, "");
-	printf("%*s\"mean_time_s\": %.6f,\n",   indent_level + 4, "", r->stats.mean_time_s);
-	printf("%*s\"std_dev_s\": %.6f,\n",     indent_level + 4, "", r->stats.std_dev_s);
-	printf("%*s\"median_time_s\": %.6f,\n", indent_level + 4, "", r->stats.median_time_s);
-	printf("%*s\"min_time_s\": %.6f,\n",    indent_level + 4, "", r->stats.min_time_s);
-	printf("%*s\"max_time_s\": %.6f,\n",    indent_level + 4, "", r->stats.max_time_s);
-	printf("%*s\"total_time_s\": %.6f\n",   indent_level + 4, "", r->stats.total_time_s);
+	printf("%*s\"mean_time_s\": %.6f,\n",   indent_level + 4, "", 
+	       r->stats.mean_time_s);
+	printf("%*s\"std_dev_s\": %.6f,\n",     indent_level + 4, "", 
+	       r->stats.std_dev_s);
+	printf("%*s\"median_time_s\": %.6f,\n", indent_level + 4, "", 
+	       r->stats.median_time_s);
+	printf("%*s\"min_time_s\": %.6f,\n",    indent_level + 4, "", 
+	       r->stats.min_time_s);
+	printf("%*s\"max_time_s\": %.6f,\n",    indent_level + 4, "", 
+	       r->stats.max_time_s);
+	printf("%*s\"total_time_s\": %.6f\n",   indent_level + 4, "", 
+	       r->stats.total_time_s);
 	printf("%*s},\n", indent_level + 2, "");
 
-	printf("%*s\"throughput_edges_per_sec\": %.2f,\n", indent_level + 2, "", r->throughput_edges_per_sec);
-	printf("%*s\"cpu_peak_rss_gb\": %.6f,\n", indent_level + 2, "", r->cpu_peak_rss_gb);
-	printf("%*s\"gpu_peak_used_gb\": %.6f\n", indent_level + 2, "", r->gpu_peak_used_gb);
+	printf("%*s\"throughput_edges_per_sec\": %.2f,\n", indent_level + 2, "", 
+	       r->throughput_edges_per_sec);
+	printf("%*s\"cpu_peak_rss_gb\": %.6f,\n", indent_level + 2, "", 
+	       r->cpu_peak_rss_gb);
+	printf("%*s\"gpu_peak_used_gb\": %.6f\n", indent_level + 2, "", 
+	       r->gpu_peak_used_gb);
 
 	printf("%*s}", indent_level, "");
 }
 
+/**
+ * @brief Print benchmark results array as formatted JSON.
+ *
+ * Outputs either all implementation results (if imptype == IMPL_ALL) or
+ * a single implementation's result.
+ *
+ * @param[in] results      Pointer to Result array to print.
+ * @param[in] indent_level Number of spaces to indent the output.
+ * @param[in] imptype      Implementation type of the benchmark.
+ */
 void
-print_results(const Result *results, const unsigned int indent_level, const unsigned int imptype)
+print_results(const Result *results, const unsigned int indent_level, 
+              const unsigned int imptype)
 {
 	printf("%*s\"results\": [\n", indent_level, "");
 
@@ -135,4 +225,3 @@ print_results(const Result *results, const unsigned int indent_level, const unsi
 
 	printf("%*s]", indent_level, "");
 }
-

@@ -31,6 +31,13 @@
 /*                            Static Helper Functions                        */
 /* ------------------------------------------------------------------------- */
 
+/** @brief Check whetever two strings are equivalant.
+ *
+ * @param[in] a Pointer to first string.
+ * @param[in] b Pointer to seconds string.
+ *
+ * @return 1 if equivalant, 0 otherwise
+ */
 static int
 streqi(const char *a, const char *b)
 {
@@ -44,6 +51,15 @@ streqi(const char *a, const char *b)
 	}
 }
 
+/**
+ * @brief Compare function for sorting.
+ * 
+ * Compares two uint32_t, to be used with qsort.
+ *
+ * @param[in] a Pointer to first variable. 
+ * @param[in] b Pointer to second variable.
+ * @return -1 if a < b, 0 if a == b, 1 if a > b. 
+ */
 static int
 cmp_u32(const void *a, const void *b)
 {
@@ -52,11 +68,27 @@ cmp_u32(const void *a, const void *b)
 	return (x > y) - (x < y);
 }
 
-/* Parse a MatrixMarket coordinate line: "i j [val...]"
- * Returns:
- *   1 on success (and sets *nonzero)
- *   0 if line is empty/comment
- *  -1 on parse error
+/** @brief Parse a MatrixMarket coordinate-format data line.
+ *
+ * Parses a single non-comment, non-empty line from a MatrixMarket
+ * coordinate file. Extracts row/column indices (1-based in file,
+ * converted to 0-based) and determines whether the entry represents
+ * a non-zero value.
+ *
+ * Leading whitespace is ignored. Lines beginning with '%' or empty
+ * lines are treated as non-data lines.
+ *
+ * @param[in]  line       Pointer to the input line.
+ * @param[in]  nrows      Number of matrix rows (upper bound check).
+ * @param[in]  ncols      Number of matrix columns (upper bound check).
+ * @param[in]  is_pattern Non-zero if matrix type is "pattern".
+ * @param[out] oi         Output row index (0-based).
+ * @param[out] oj         Output column index (0-based).
+ * @param[out] nonzero    Set to 1 if entry is non-zero, 0 otherwise.
+ *
+ * @return  1 on successful parsing of a data entry,
+ *          0 if line is empty or a comment,
+ *         -1 on parse or bounds error.
  */
 static int
 parse_coord_line(const char *line, size_t nrows, size_t ncols,
@@ -117,7 +149,16 @@ parse_coord_line(const char *line, size_t nrows, size_t ncols,
 	return 1;
 }
 
-/* Unique in-place for sorted slice, returns new length */
+/** @brief Remove duplicate values from a sorted uint32_t array in-place.
+ *
+ * Assumes the input array is sorted in ascending order. Compacts the
+ * array so that each value appears only once, preserving order.
+ *
+ * @param[in,out] a Pointer to the sorted array.
+ * @param[in]     n Number of elements in the array.
+ *
+ * @return The number of unique elements remaining in the array.
+ */
 static size_t
 unique_u32(uint32_t *a, size_t n)
 {
@@ -130,6 +171,21 @@ unique_u32(uint32_t *a, size_t n)
 	return w;
 }
 
+/** @brief Check whether an environment variable is set to a "truthy" value.
+ *
+ * Accepts common boolean-like values in a case-insensitive manner.
+ * The following prefixes are considered true:
+ *   - '1'
+ *   - 't' / 'T' (true)
+ *   - 'y' / 'Y' (yes)
+ *   - 'o' / 'O' (on)
+ *
+ * Any other value, or an unset/empty variable, is treated as false.
+ *
+ * @param[in] name Name of the environment variable.
+ *
+ * @return 1 if the variable is set to a truthy value, 0 otherwise.
+ */
 static int
 env_truthy(const char *name)
 {
@@ -147,8 +203,25 @@ env_truthy(const char *name)
 /*                           Public API Functions                            */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * @brief Load a sparse binary matrix from a MatrixMarket .mtx file.
+ *
+ * Reads coordinate format matrices and converts them to CSC format.
+ * For undirected graphs (symmetric/skew-symmetric/Hermitian matrices or
+ * when CC_UNDIRECTED=1 environment variable is set), edges are stored
+ * only once in canonical form: (min -> max).
+ *
+ * Self-loops are removed in undirected mode.
+ * Duplicate entries are removed.
+ *
+ * @note The returned matrix must be freed using matrixfree().
+ *
+ * @param[in] path Path to the .mtx file.
+ *
+ * @return Newly allocated Matrix, or NULL on failure.
+ */
 Matrix*
-matrixload(const char *path)
+matrix_load(const char *path)
 {
 	FILE *f = fopen(path, "r");
 	if (!f) {
@@ -480,14 +553,15 @@ fail:
 }
 
 /**
- * @brief Free a CSCBinaryMatrix and its associated memory.
+ * @brief Free a Matrix and its associated memory.
  *
- * @note Safe to call with NULL.
+ * Frees the row index array, column pointer array, and the Matrix structure
+ * itself. Safe to call with NULL.
  *
- * @param[in] m Matrix to free.
+ * @param[in] matrix Matrix to free.
  */
 void
-matrixfree(Matrix *matrix)
+matrix_free(Matrix *matrix)
 {
 	if (!matrix)
 		return;

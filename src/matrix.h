@@ -4,7 +4,7 @@
  *
  * Provides functionality to read and free sparse binary matrices
  * stored in CSC format. Non-zero values are represented implicitly as 1.
- * Reads from .mtx files.
+ * Reads from MatrixMarket .mtx files.
  */
 
 #ifndef MATRIX_H
@@ -17,7 +17,12 @@
  * @struct Matrix
  * @brief Compressed Sparse Column (CSC) representation of a binary matrix.
  *
- * Non-zero entries are implicitly 1. Stores only row indices and column pointers.
+ * Non-zero entries are implicitly 1. Stores only row indices and column 
+ * pointers. Used to represent adjacency matrices for graph algorithms.
+ *
+ * For a matrix with ncols columns:
+ * - Column j's non-zero row indices are stored in rowi[colptr[j]..colptr[j+1])
+ * - Total non-zeros (edges) is colptr[ncols]
  */
 typedef struct {
 	size_t nrows;     /**< Number of rows in the matrix */
@@ -27,23 +32,33 @@ typedef struct {
 	uint32_t *colptr; /**< Column pointers (length ncols + 1) */
 } Matrix;
 
-/** @brief Load a sparse binary matrix from a .mtx file.
+/**
+ * @brief Load a sparse binary matrix from a MatrixMarket .mtx file.
+ *
+ * Reads coordinate format matrices and converts them to CSC format.
+ * For undirected graphs (symmetric/skew-symmetric/Hermitian matrices or
+ * when CC_UNDIRECTED=1 environment variable is set), edges are stored
+ * only once in canonical form: (min -> max).
+ *
+ * Self-loops are removed in undirected mode.
+ * Duplicate entries are removed.
  *
  * @note The returned matrix must be freed using matrixfree().
  *
- * @param[in] path Path to the matrix file.
+ * @param[in] path Path to the .mtx file.
  *
  * @return Newly allocated Matrix, or NULL on failure.
  */
-Matrix* matrixload(const char *path);
+Matrix* matrix_load(const char *path);
 
 /**
- * @brief Free a CSCBinaryMatrix and its associated memory.
+ * @brief Free a Matrix and its associated memory.
  *
- * @note Safe to call with NULL.
+ * Frees the row index array, column pointer array, and the Matrix structure
+ * itself. Safe to call with NULL.
  *
- * @param[in] m Matrix to free.
+ * @param[in] matrix Matrix to free.
  */
-void matrixfree(Matrix *matrix);
+void matrix_free(Matrix *matrix);
 
 #endif /* MATRIX_H */

@@ -89,7 +89,7 @@ parse_uint(const char *s, unsigned int *out)
  * @brief Emit a consistent error for invalid/missing numeric argument.
  */
 static int
-badnum(char opt)
+bad_num(char opt)
 {
 	uerrf("invalid or missing argument for -%c", opt);
 	usage();
@@ -100,7 +100,7 @@ badnum(char opt)
  * @brief Emit a consistent error for missing/unknown option.
  */
 static int
-badopt(int opt, int is_missing_arg)
+bad_opt(int opt, int is_missing_arg)
 {
 	if (is_missing_arg)
 		uerrf("missing argument for -%c", opt);
@@ -117,26 +117,29 @@ badopt(int opt, int is_missing_arg)
 /**
  * @brief Parses command-line arguments.
  *
+ * Validates all arguments and ensures the matrix file exists and is readable.
+ * Provides helpful error messages and usage information on invalid input.
+ *
  * Supported options:
- *   -n <trials>   Number of trials (must be > 0)
- *   -w <wtrials>  Number of warmup trials (must be > 0)
- *   -i <imptype>  Implementation type (>= 0)
+ *   -n <trials>   Number of benchmark trials (must be > 0)
+ *   -w <wtrials>  Number of warmup trials (>= 0)
+ *   -i <imptype>  Implementation type (0 to IMPL_ALL)
  *   -h            Show usage and exit
  *
- * Arguments:
- *   <matrix_file> Path to the input matrix file (Matrix Market format)
+ * Required argument:
+ *   <matrix_file> Path to the input matrix file (MatrixMarket .mtx format)
  *
- * @param[in]  argc     Argument count.
- * @param[in]  argv     Argument vector.
- * @param[out] trials   Output: number of trials.
+ * @param[in]  argc     Argument count from main().
+ * @param[in]  argv     Argument vector from main().
+ * @param[out] trials   Output: number of benchmark trials.
  * @param[out] wtrials  Output: number of warmup trials.
- * @param[out] imptype  Output: implementation type.
+ * @param[out] imptype  Output: implementation type index.
  * @param[out] filepath Output: path to matrix file.
  *
- * @return 0 on success, -1 if help requested, 1 on error
+ * @return 0 on success, -1 if help requested, 1 on error.
  */
 int
-parseargs(int argc, char *argv[],
+parse_args(int argc, char *argv[],
           unsigned int *trials, unsigned int *wtrials,
           unsigned int *imptype, char **filepath)
 {
@@ -149,7 +152,7 @@ parseargs(int argc, char *argv[],
 		case 'n': {
 			unsigned int v;
 			if (!parse_uint(optarg, &v))
-				return badnum('n');
+				return bad_num('n');
 			if (v == 0) {
 				uerrf("trials must be > 0");
 				usage();
@@ -162,7 +165,7 @@ parseargs(int argc, char *argv[],
 		case 'w': {
 			unsigned int v;
 			if (!parse_uint(optarg, &v))
-				return badnum('w');
+				return bad_num('w');
 			if (wtrials)
 				*wtrials = v;
 			break;
@@ -170,7 +173,7 @@ parseargs(int argc, char *argv[],
 		case 'i': {
 			unsigned int v;
 			if (!parse_uint(optarg, &v))
-				return badnum('i');
+				return bad_num('i');
 			if (v > IMPL_ALL) {
 				uerrf("implementation type is invalid. Must be <= %u", IMPL_ALL);
 				usage();
@@ -187,8 +190,8 @@ parseargs(int argc, char *argv[],
 		case '?':
 		default:
 			if (optopt == 'n' || optopt == 'w' || optopt == 'i')
-				return badopt(optopt, 1);
-			return badopt(optopt ? optopt : '?', 0);
+				return bad_opt(optopt, 1);
+			return bad_opt(optopt ? optopt : '?', 0);
 		}
 	}
 

@@ -7,9 +7,10 @@
  * Department of Electrical and Computer Engineering,
  * Aristotle University of Thessaloniki.
  *
- * Benchmarks connected components algorithms,on graphs store in .mtx format.
- * Uses cuda to run the different implementations on the gpu.
- * Usage: ./connected_components [-n trials] [-w wtrials] [-i imptype] ./data_filepath
+ * Benchmarks connected components algorithms on graphs stored in .mtx format.
+ * Uses CUDA to run different implementations on the GPU.
+ *
+ * Usage: ./connected_components [-n trials] [-w wtrials] [-i imptype] <matrix_file>
  */
 
 #include "args.h"
@@ -17,63 +18,92 @@
 #include "error.h"
 #include "matrix.h"
 
-/* default values for cli args */
+/* ------------------------------------------------------------------------- */
+/*                              Default Values                               */
+/* ------------------------------------------------------------------------- */
+
 #define DEFAULT_TRIALS  5
-#define DEFAILT_WTRIALS 1
+#define DEFAULT_WTRIALS 1
 #define DEFAULT_IMPTYPE IMPL_ALL
 
+/* ------------------------------------------------------------------------- */
+/*                                Main Function                              */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Program entry point.
+ *
+ * Parses command-line arguments, loads the input matrix, initializes the
+ * benchmark structure, runs the connected components algorithm(s), and
+ * prints results in JSON format.
+ *
+ * @param[in] argc Argument count.
+ * @param[in] argv Argument vector.
+ *
+ * @return 0 on success, 1 on error.
+ */
 int
 main(int argc, char *argv[])
 {
-	Matrix *mtx;
-	Benchmark *bench;
+	Matrix *mtx = NULL;
+	Benchmark *bench = NULL;
 	double load_time;
+	int ret = 1;
 
-	/* cmdline args */
-	char         *path    = NULL;
-	unsigned int trials   = DEFAULT_TRIALS;
-	unsigned int wtrials  = DEFAILT_WTRIALS;
-	unsigned int imptype  = DEFAULT_IMPTYPE;
+	/* Command-line arguments with defaults */
+	char *path = NULL;
+	unsigned int trials = DEFAULT_TRIALS;
+	unsigned int wtrials = DEFAULT_WTRIALS;
+	unsigned int imptype = DEFAULT_IMPTYPE;
 
-	errinit(argv[0]);
+	/* Initialize error reporting with program name */
+	err_init(argv[0]);
 
-	switch (parseargs(argc, argv, &trials, &wtrials, &imptype, &path)) {
-		case 1:
-			return 1;
+	/* Parse command-line arguments */
+	switch (parse_args(argc, argv, &trials, &wtrials, &imptype, &path)) {
+	case 1:
+		/* Parse error */
+		return 1;
 
-		case -1:
-			return 0;
+	case -1:
+		/* Help requested */
+		return 0;
 
-		default:
-			break;
+	default:
+		/* Success, continue */
+		break;
 	}
 
+	/* Load matrix from file and measure loading time */
 	{
-		double time_start = nowsec();
-		mtx = matrixload(path);
-		load_time = nowsec() - time_start;
+		double time_start = now_sec();
+		mtx = matrix_load(path);
+		load_time = now_sec() - time_start;
 	}
 
 	if (!mtx)
-		return 1;
+		goto cleanup;
 
-	bench = benchmarkinit(path, trials, wtrials, imptype, mtx);
-	if (!bench) {
-		matrixfree(mtx);
-		return 1;
-	}
+	/* Initialize benchmark structure */
+	bench = benchmark_init(path, trials, wtrials, imptype, mtx);
+	if (!bench)
+		goto cleanup;
 
+	/* Record matrix load time in benchmark metadata */
 	bench->matrix_info.load_time_s = load_time;
 
-	if (benchmarkcc(mtx, bench)) {
-		benchmarkfree(bench);
-		matrixfree(mtx);
-		return 1;
-	}
+	/* Run the benchmark */
+	if (benchmark_cc(mtx, bench))
+		goto cleanup;
 
-	benchmarkprint(bench);
+	/* Print results in JSON format */
+	benchmark_print(bench);
 
-	benchmarkfree(bench);
-	matrixfree(mtx);
-	return 0;
+	/* Success */
+	ret = 0;
+
+cleanup:
+	benchmark_free(bench);
+	matrix_free(mtx);
+	return ret;
 }

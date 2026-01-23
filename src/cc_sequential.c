@@ -66,18 +66,14 @@ union_nodes_by_index(uint32_t *label, uint32_t i, uint32_t j)
 }
 
 /**
- * @brief Computes connected components using union-find algorithm.
+ * @brief Sequential CPU connected components using union-find.
  *
- * Algorithm steps:
- * 1. Initialize each node as its own parent (singleton sets)
- * 2. For each edge (i,j), union the sets containing i and j
- * 3. Perform final path compression to flatten all trees
- * 4. Count nodes that are their own parent (roots = components)
+ * Strategy: Union-find with path halving optimization.
+ * Single-threaded algorithm suitable for baseline comparison.
  *
- * @param[in]  m          Sparse binary matrix in CSC format representing graph.
- * @param[out] iterations Iterations needed by the algorithm to converge
- *                        (always 1 in this union find)
- * @return Number of connected components, or -1 on error
+ * @param[in] mtx Sparse binary matrix in CSC format (adjacency matrix).
+ *
+ * @return Number of connected components, or -1 on error.
  */
 int
 connected_components_sequential(const Matrix *m)

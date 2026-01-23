@@ -117,12 +117,12 @@ getmeminfo(Benchmark *b)
 	if (sysinfo(&info) == 0) {
 		b->sys_info.ram_gb  = info.totalram  / 1024.0 / 1024.0 / 1024.0 * info.mem_unit;
 		b->sys_info.swap_gb = info.totalswap / 1024.0 / 1024.0 / 1024.0 * info.mem_unit;
-#else
-	{
-#endif
 	} else {
 		b->sys_info.ram_gb = b->sys_info.swap_gb = 0.0;
 	}
+#else
+	b->sys_info.ram_gb = b->sys_info.swap_gb = 0.0;
+#endif
 }
 
 /**
@@ -203,89 +203,6 @@ read_rss_kb(void)
 }
 #endif
 
-/* ------------------------------------------------------------------------- */
-/*                            Public API Implementation                      */
-/* ------------------------------------------------------------------------- */
-
-/**
- * @brief Returns current monotonic time in seconds.
- */
-double
-nowsec(void)
-{
-	struct timespec t;
-	clock_gettime(CLOCK_MONOTONIC, &t);
-	return t.tv_sec + t.tv_nsec / 1e9;
-}
-
-/**
- * @brief Initializes a benchmark structure.
- *
- * Allocates and populates a new Benchmark instance for the specified
- * algorithm and dataset. Also allocates memory for timing results.
- *
- * @param[in] path     Path to the dataset file.
- * @param[in] trials   Number of trials to run.
- * @param[in] wtrials  Number of warmup trials before mesuring performance.
- * @param[in] mat      Pointer to the Matrix used as input.
- *
- * @return Pointer to a newly allocated Benchmark structure, or `NULL` on failure.
- */
-Benchmark*
-benchmarkinit(const char *path, const unsigned int trials, const unsigned int wtrials, const unsigned int imptype, const Matrix *m)
-{
-	if (!trials) {
-		DERRF("invalid number of trials");
-		return NULL;
-	}
-
-	Benchmark *b = malloc(sizeof(Benchmark));
-	if (!b) {
-		DERRNOF("malloc() failed");
-		return NULL;
-	}
-
-	// Add matrix info
-	b->matrix_info.cols = m->ncols;
-	b->matrix_info.rows = m->nrows;
-	b->matrix_info.nnz = m->nnz;
-	strncpy(b->matrix_info.path, path, sizeof(b->matrix_info.path));
-	b->matrix_info.path[sizeof(b->matrix_info.path) - 1] = '\0';
-
-	b->benchmark_info.trials  = trials;
-	b->benchmark_info.wtrials = wtrials;
-	b->benchmark_info.imptype = imptype;
-	b->gpu_info.available = 0;
-
-	for (unsigned int i = 0; i < IMPL_ALL; i++) {
-		b->results[i].times = NULL;
-		b->results[i].name[0] = '\0';
-		b->results[i].timestamp[0] = '\0';
-		b->results[i].stable_results = 1;
-	}
-
-	return b;
-}
-
-/**
- * @brief Frees a Benchmark structure and all allocated resources.
- *
- * @param[in,out] b Pointer to the Benchmark structure to free. Safe to call with NULL.
- */
-void
-benchmarkfree(Benchmark *b)
-{
-	if (!b)
-		return;
-
-	for (unsigned int i = 0; i < IMPL_ALL; i++) {
-		if (b->results[i].times)
-			free(b->results[i].times);
-	}
-
-	free(b);
-}
-
 /**
  * @brief Runs a connected components benchmark on the selected implementation.
  *
@@ -296,7 +213,7 @@ benchmarkfree(Benchmark *b)
  * @return `0` on success or`1` on algorithm failure or invalid data,
  */
 static int
-benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
+benchmark_impl(const Matrix *m, Benchmark *b, unsigned int im)
 {
 	double time_tot_start, time_tot_end;
 	unsigned long long rss_peak_kb;
@@ -342,14 +259,14 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 	}
 
 	/* normal runs */
-	time_tot_start = nowsec();
+	time_tot_start = now_sec();
 	for (unsigned int i = 0; i < b->benchmark_info.trials; i++) {
 		double time_start, time_end;
 		int result;
 
-		time_start = nowsec();
+		time_start = now_sec();
 		result = connected_components(m, im);
-		time_end = nowsec();
+		time_end = now_sec();
 
 		if (result < 0) {
 			uerrf("implementation \"%s\" encountered an error", b->results[im].name);
@@ -376,47 +293,143 @@ benchmarkimpl(const Matrix *m, Benchmark *b, unsigned int im)
 			if (set_cuda_memory_metrics(&b->results[im]))
 				DERRF("failed to set CUDA memory metrics");
 	}
-	time_tot_end = nowsec();
+	time_tot_end = now_sec();
 
 	b->results[im].cpu_peak_rss_gb = (double)rss_peak_kb / 1024.0 / 1024.0;
 	b->results[im].stats.total_time_s = time_tot_end - time_tot_start;
 	return 0;
 }
 
+/* ------------------------------------------------------------------------- */
+/*                            Public API Implementation                      */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * @brief Returns current monotonic time in seconds.
+ *
+ * Uses CLOCK_MONOTONIC for reliable timing measurements that are not
+ * affected by system clock adjustments.
+ *
+ * @return Current time in seconds (floating point).
+ */
+double
+now_sec(void)
+{
+	struct timespec t;
+	clock_gettime(CLOCK_MONOTONIC, &t);
+	return t.tv_sec + t.tv_nsec / 1e9;
+}
+
+/**
+ * @brief Initializes a benchmark structure.
+ *
+ * Allocates and populates a new Benchmark instance for the specified
+ * algorithm and dataset. Initializes all result structures and allocates
+ * memory for timing results.
+ *
+ * @param[in] path    Path to the dataset file.
+ * @param[in] trials  Number of trials to run.
+ * @param[in] wtrials Number of warmup trials before measuring performance.
+ * @param[in] imptype Implementation type to benchmark (or IMPL_ALL).
+ * @param[in] mtx     Pointer to the Matrix used as input.
+ *
+ * @return Pointer to a newly allocated Benchmark structure, or NULL on failure.
+ */
+Benchmark*
+benchmark_init(const char *path, const unsigned int trials, const unsigned int wtrials, const unsigned int imptype, const Matrix *m)
+{
+	if (!trials) {
+		DERRF("invalid number of trials");
+		return NULL;
+	}
+
+	Benchmark *b = malloc(sizeof(Benchmark));
+	if (!b) {
+		DERRNOF("malloc() failed");
+		return NULL;
+	}
+
+	// Add matrix info
+	b->matrix_info.cols = m->ncols;
+	b->matrix_info.rows = m->nrows;
+	b->matrix_info.nnz = m->nnz;
+	strncpy(b->matrix_info.path, path, sizeof(b->matrix_info.path));
+	b->matrix_info.path[sizeof(b->matrix_info.path) - 1] = '\0';
+
+	b->benchmark_info.trials  = trials;
+	b->benchmark_info.wtrials = wtrials;
+	b->benchmark_info.imptype = imptype;
+	b->gpu_info.available = 0;
+
+	for (unsigned int i = 0; i < IMPL_ALL; i++) {
+		b->results[i].times = NULL;
+		b->results[i].name[0] = '\0';
+		b->results[i].timestamp[0] = '\0';
+		b->results[i].stable_results = 1;
+	}
+
+	return b;
+}
+
+/**
+ * @brief Frees a Benchmark structure and all allocated resources.
+ *
+ * Releases all memory associated with the benchmark including timing
+ * arrays for all implementations. Safe to call with NULL.
+ *
+ * @param[in,out] bench Pointer to the Benchmark structure to free.
+ */
+void
+benchmark_free(Benchmark *b)
+{
+	if (!b)
+		return;
+
+	for (unsigned int i = 0; i < IMPL_ALL; i++) {
+		if (b->results[i].times)
+			free(b->results[i].times);
+	}
+
+	free(b);
+}
+
 /**
  * @brief Runs the complete connected components benchmark.
  *
- * @param[in]     m Input Matrix.
- * @param[in,out] b Benchmark object containing configuration and result storage.
+ * Executes the specified implementation(s) with the configured number
+ * of warmup and measurement trials. Collects timing data, memory usage,
+ * and validates result stability across trials.
  *
- * @return
- * - `0` on success,
- * - `1` on algorithm failure or invalid data,
+ * @param[in]     mtx   Input Matrix (adjacency matrix in CSC format).
+ * @param[in,out] bench Benchmark object containing configuration and result storage.
+ *
+ * @return 0 on success, 1 on algorithm failure or invalid data.
  */
 int
-benchmarkcc(const Matrix *m, Benchmark *b)
+benchmark_cc(const Matrix *m, Benchmark *b)
 {
 	if (b->benchmark_info.imptype == IMPL_ALL) {
 		for (unsigned int i = 0; i < IMPL_ALL; i++) {
-			if (benchmarkimpl(m, b, i))
+			if (benchmark_impl(m, b, i))
 				return 1;
 		}
 		return 0;
 	}
 	
-	return benchmarkimpl(m, b, b->benchmark_info.imptype);
+	return benchmark_impl(m, b, b->benchmark_info.imptype);
 }
 
 /**
  * @brief Prints benchmark results in structured JSON format.
  *
  * Outputs benchmark metadata, timing statistics, system information,
- * and matrix properties in JSON form for easy parsing or logging.
+ * GPU information, and matrix properties in valid JSON format to stdout.
+ * Suitable for pipeline integration and automated result collection.
  *
- * @param b Pointer to the Benchmark structure with populated data.
+ * @param[in] bench Pointer to the Benchmark structure with populated data.
  */
 void
-benchmarkprint(Benchmark *b)
+benchmark_print(Benchmark *b)
 {
 	if (!b)
 		return;
@@ -437,7 +450,7 @@ benchmarkprint(Benchmark *b)
 	}
 
 	if (b->benchmark_info.imptype != IMPL_SEQUENTIAL) {
-		if (getcudadeviceinfo(&b->gpu_info))
+		if (get_cuda_device_info(&b->gpu_info))
 			return;
 	}
 

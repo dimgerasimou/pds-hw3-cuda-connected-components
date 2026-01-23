@@ -23,7 +23,7 @@ extern "C" {
  *
  * @param[in] name Program name (typically argv[0]).
  */
-void errinit(const char *name);
+void err_init(const char *name);
 
 /**
  * @brief Get program name.
@@ -61,7 +61,7 @@ void uerrf(const char *fmt, ...)
  *
  * Message format:
  *   program_name: <formatted message>: strerror(err)\n   (if err != 0)
- *   program_name: <formatted message>\n                 (if err == 0)
+ *   program_name: <formatted message>\n                  (if err == 0)
  *
  * Use this for expected failures that have a meaningful errno (file open,
  * read/write, permission errors, etc.).
