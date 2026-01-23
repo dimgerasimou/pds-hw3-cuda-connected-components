@@ -4,12 +4,9 @@
   <img src="https://img.shields.io/badge/acceleration-CUDA-green" alt="CUDA">
 </p>
 
-Assignment #3 of the **Parallel and Distributed Systems** coursework:  
-[parallel-distributed-systems](https://github.com/dimgerasimou/parallel-distributed-systems)
+Assignment #3 of the **Parallel and Distributed Systems** coursework: [parallel-distributed-systems](https://github.com/dimgerasimou/parallel-distributed-systems)
 
 A **GPU-based connected components detection** project targeting **single-node NVIDIA GPUs** using **CUDA**, with a strong emphasis on performance analysis, memory behavior, and reproducible benchmarking.
-
----
 
 ## Overview
 
@@ -21,46 +18,38 @@ The main objectives are:
 - Compare GPU implementations against a CPU baseline
 - Analyze performance bottlenecks on real-world sparse graphs
 
-The implementation and evaluation closely follow the methodology described in the accompanying technical report.
-
----
-
 ## Features
 
 - CUDA-based connected components implementations
 - CPU **sequential baseline** for correctness and comparison
 - Multiple CUDA variants exploring different execution strategies:
-  - **Warp-per-row**
-  - **Block-per-row**
+  - **Thread per Vertex**
+  - **Warp per row**
+  - **Block per row**
   - **Afforest-inspired GPU variant**
-- Sparse graph representation optimized for GPU access
+- Sparse graph with Compressed Sparse Column (CSC) representation optimized for GPU access
 - Automated benchmarking with warmup and trial runs
 - Detailed **JSON output** including timing, throughput, and memory usage
 
----
-
 ## Algorithm
 
-The GPU implementations are based on **iterative label propagation**, adapted for execution on CUDA-capable devices.
+The implementations use a parallel **Union–Find (disjoint-set)** approach to compute connected components.
 
-High-level algorithm:
-1. Initialize one label per vertex
-2. Iteratively relax labels along edges in parallel
-3. Use atomic operations to enforce correctness
-4. Detect convergence when no labels change
-5. Compute the final number of connected components
+Each vertex maintains a parent pointer. Edges are processed in parallel, performing concurrent find and
+union operations to merge components. Atomic operations are used to safely update parent pointers, and
+path compression is applied to reduce tree depth.
 
-Each CUDA variant differs in how work is assigned to threads (e.g. warp-level vs block-level parallelism), allowing exploration of the trade-offs between parallelism, atomic contention, and memory locality.
+An Afforest-inspired sampling phase is optionally used on the GPU to merge large components early and
+reduce work in the full union pass.
 
----
+Different CUDA variants differ only in how edges are mapped to threads
+(thread-, warp-, or block-level parallelism).
 
 ## Graph Representation
 
 Graphs are stored in a sparse matrix format derived from **Matrix Market (`.mtx`)** inputs.
 
-Internally, graphs are converted to compressed sparse representations suitable for GPU execution, balancing memory footprint and access efficiency.
-
----
+Internally, graphs are converted to a compressed sparse column representation suitable for GPU execution.
 
 ## Build
 
@@ -80,8 +69,6 @@ Produces:
 bin/connected_components_cuda
 ```
 
----
-
 ## Usage
 
 ```bash
@@ -96,8 +83,6 @@ Available options control:
 
 Run with `-h` to see all supported options.
 
----
-
 ## Experimental Setup
 
 Benchmarks are executed using:
@@ -107,23 +92,15 @@ Benchmarks are executed using:
 
 All measurements are reported in a machine-readable JSON format for post-processing and plotting.
 
----
-
 ## Performance Results
 
-Detailed benchmark results and plots are provided in:
-
-```
-performance.md
-```
+Detailed benchmark results and plots are provided in: [docs/performance.md](docs/performance.md)
 
 The analysis focuses on:
 - GPU speedup over the CPU baseline
 - Impact of graph structure on convergence
 - Memory-bandwidth and atomic-operation limits
 - Scalability within single-GPU memory constraints
-
----
 
 ## Notes on Performance
 
