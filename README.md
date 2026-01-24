@@ -45,12 +45,6 @@ reduce work in the full union pass.
 Different CUDA variants differ only in how edges are mapped to threads
 (thread-, warp-, or block-level parallelism).
 
-## Graph Representation
-
-Graphs are stored in a sparse matrix format derived from **Matrix Market (`.mtx`)** inputs.
-
-Internally, graphs are converted to a compressed sparse column representation suitable for GPU execution.
-
 ## Build
 
 ### Requirements
