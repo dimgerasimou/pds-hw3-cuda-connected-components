@@ -88,7 +88,7 @@ All measurements are reported in a machine-readable JSON format for post-process
 
 ## Performance Results
 
-Detailed benchmark results and plots are provided in: [docs/performance.md](docs/performance.md)
+Detailed benchmark results are provided in: [docs/performance.md](docs/performance.md)
 
 The analysis focuses on:
 - GPU speedup over the CPU baseline
